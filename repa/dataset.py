@@ -6,7 +6,6 @@ def get_celeba_dataloader(data_dir: str, batch_size: int, num_workers: int = 4) 
     transform = transforms.Compose([
         transforms.Resize(256),
         transforms.CenterCrop(256),
-        transforms.RandomHorizontalFlip(), # Safe to use again since we aren't caching!
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -21,7 +20,7 @@ def get_celeba_dataloader(data_dir: str, batch_size: int, num_workers: int = 4) 
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=True,          
         drop_last=True,
         persistent_workers=True
     )

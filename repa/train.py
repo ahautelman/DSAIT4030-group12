@@ -10,6 +10,7 @@ class DiffusionTrainer:
         self.use_repa = use_repa
         self.lambda_repa = lambda_repa
         self.device = self.wrapper.device
+        self.dtype = self.wrapper.compute_dtype
 
         self.noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
@@ -19,6 +20,9 @@ class DiffusionTrainer:
 
         self.optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate)
 
+        # Initialize GradScaler based on hardware constraints defined in wrapper
+        self.scaler = torch.amp.GradScaler(device=self.device.type, enabled=self.wrapper.use_scaler)
+
     def train_step(self, x_0: torch.Tensor) -> dict:
         self.optimizer.zero_grad(set_to_none=True)
         B = x_0.shape[0]
@@ -26,12 +30,10 @@ class DiffusionTrainer:
         class_labels = torch.full((B,), 1000, device=self.device, dtype=torch.long)
 
         # 1. On-The-Fly Latents & Features
-        with torch.no_grad(), torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
-            # Encode VAE (x_0 is dynamically cast to frozen_dtype inside VAE)
-            latent_dist = self.wrapper.vae.encode(x_0.to(self.wrapper.frozen_dtype)).latent_dist
+        with torch.no_grad(), torch.autocast(device_type=self.device.type, dtype=self.dtype):
+            latent_dist = self.wrapper.vae.encode(x_0.to(self.dtype)).latent_dist
             latents_0 = latent_dist.sample() * self.wrapper.vae.config.scaling_factor
 
-            # Extract Teacher Features
             if self.use_repa:
                 z_0 = self.wrapper.get_teacher_features(x_0)
 
@@ -43,7 +45,7 @@ class DiffusionTrainer:
         loss_repa_val = 0.0
 
         # 3. Student Pass & Loss (Mixed Precision)
-        with torch.autocast(device_type=self.device.type, dtype=torch.bfloat16):
+        with torch.autocast(device_type=self.device.type, dtype=self.dtype):
             student_outputs = self.wrapper.student(x_t, timestep=timesteps, class_labels=class_labels)
             predicted_noise, _ = student_outputs.sample.chunk(2, dim=1)
 
@@ -51,18 +53,20 @@ class DiffusionTrainer:
                 h_t = self.wrapper.hidden_states['h_t'].contiguous()
                 z_hat, z_0_aligned = self.wrapper.align_features(h_t, z_0)
                 loss_repa = - F.cosine_similarity(z_hat, z_0_aligned, dim=-1).mean()
-                loss_repa_val = loss_repa.detach()
+                loss_repa_val = loss_repa.item()  
             else:
                 loss_repa = 0.0
 
             loss_diff = F.mse_loss(predicted_noise, noise)
             loss_total = loss_diff + (self.lambda_repa * loss_repa if self.use_repa else 0.0)
 
-        loss_total.backward()
-        self.optimizer.step()
+        # 4. Scaled Backward Pass
+        self.scaler.scale(loss_total).backward()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         return {
-            "loss_total": loss_total.detach(),
-            "loss_diff": loss_diff.detach(),
+            "loss_total": loss_total.item(),
+            "loss_diff": loss_diff.item(),
             "loss_repa": loss_repa_val
         }
