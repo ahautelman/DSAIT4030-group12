@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from transformers import AutoModel
 from diffusers import DiTTransformer2DModel, AutoencoderKL
 from typing import Tuple, Dict
+from torchvision.transforms.functional import gaussian_blur
 
 
 class ProjectionHead(nn.Module):
@@ -22,7 +23,7 @@ class ProjectionHead(nn.Module):
 
 
 class iREPAProjectionHead(nn.Module):
-    """iREPA Spatially Preserving 3x3 Convolutional Projection Head."""
+    """iREPA Spatially Preserving 3x3 Convolutional Projection Head (Also used for DoG)."""
 
     def __init__(self, student_dim: int, teacher_dim: int):
         super().__init__()
@@ -49,7 +50,8 @@ class REPAWrapper(nn.Module):
     ):
         super().__init__()
         self.mode = mode.lower()
-        assert self.mode in ["vanilla", "repa", "irepa"], f"Unknown mode: {mode}"
+        # ADDED "dog" VALIDATION
+        assert self.mode in ["vanilla", "repa", "irepa", "dog"], f"Unknown mode: {mode}"
 
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
@@ -98,7 +100,7 @@ class REPAWrapper(nn.Module):
 
         if self.mode == "repa":
             self.proj_head = ProjectionHead(student_dim, teacher_dim).to(self.device)
-        elif self.mode == "irepa":
+        elif self.mode in ["irepa", "dog"]:  # DOG USES THE SAME CONV HEAD AS iREPA
             self.proj_head = iREPAProjectionHead(student_dim, teacher_dim).to(self.device)
         else:
             self.proj_head = nn.Identity()
@@ -138,8 +140,8 @@ class REPAWrapper(nn.Module):
                 z_hat = z_hat_spatial.flatten(2).transpose(1, 2)
             return z_hat, z_0
 
-        elif self.mode == "irepa":
-            # iREPA: Reshape representations into 2D spatial grids
+        elif self.mode in ["irepa", "dog"]:
+            # Reshape representations into 2D spatial grids
             h_t_spatial = h_t.transpose(1, 2).view(B, D_s, H_s, H_s)
             z_hat_spatial = self.proj_head(h_t_spatial)  # [B, D_t, H_s, H_s]
 
@@ -148,11 +150,19 @@ class REPAWrapper(nn.Module):
             if H_s != H_t:
                 z_hat_spatial = F.interpolate(z_hat_spatial, size=(H_t, H_t), mode='bilinear', align_corners=False)
 
-            # Perform Spatial Instance-like Normalization over the teacher target to eliminate dominant global components
-            spatial_mean = z_0_spatial.mean(dim=[-2, -1], keepdim=True)
-            spatial_std = z_0_spatial.std(dim=[-2, -1], keepdim=True) + 1e-6
-            z_0_normalized = (z_0_spatial - spatial_mean) / spatial_std
+            if self.mode == "irepa":
+                # iREPA: Spatial Instance-like Normalization
+                spatial_mean = z_0_spatial.mean(dim=[-2, -1], keepdim=True)
+                spatial_std = z_0_spatial.std(dim=[-2, -1], keepdim=True) + 1e-6
+                z_0_target = (z_0_spatial - spatial_mean) / spatial_std
 
-            return z_hat_spatial, z_0_normalized
+            else:
+                # DoG: Difference of Gaussians (Spectrum Matching Hypothesis)
+                # Apply band-pass filtering to isolate mid-frequency directional energy
+                blur1 = gaussian_blur(z_0_spatial, kernel_size=[5, 5], sigma=[1.0, 1.0])
+                blur2 = gaussian_blur(z_0_spatial, kernel_size=[5, 5], sigma=[2.0, 2.0])
+                z_0_target = blur1 - blur2
+
+            return z_hat_spatial, z_0_target
 
         return h_t, z_0

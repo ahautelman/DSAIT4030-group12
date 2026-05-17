@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--max_steps", type=int, default=8_000)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa"], default="irepa",
+    parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa", "dog"], default="dog",
                         help="Structural alignment methodology variant to implement")
     parser.add_argument("--lambda_repa", type=float, default=0.1)
     parser.add_argument("--eval_interval", type=int, default=2000)
@@ -166,7 +166,7 @@ def main():
                 "fid": current_fid,
                 "mode": args.mode
             }
-            if args.mode in ["repa", "irepa"]:
+            if args.mode in ["repa", "irepa", "dog"]:
                 checkpoint_dict["proj_head_state"] = trainer.wrapper.proj_head.state_dict()
 
             torch.save(checkpoint_dict, os.path.join(args.output_dir, f"checkpoint_last_{args.mode}.pt"))

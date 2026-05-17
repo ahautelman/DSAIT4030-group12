@@ -15,7 +15,7 @@ class DiffusionTrainer:
         self.noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
         trainable_params = list(self.wrapper.student.parameters())
-        if self.mode in ["repa", "irepa"]:
+        if self.mode in ["repa", "irepa", "dog"]:
             trainable_params += list(self.wrapper.proj_head.parameters())
 
         self.optimizer = torch.optim.AdamW(trainable_params, lr=learning_rate)
@@ -51,7 +51,7 @@ class DiffusionTrainer:
                 if self.mode == "repa":
                     # Token sequence cosine similarity
                     loss_repa = - F.cosine_similarity(z_hat, z_target, dim=-1).mean()
-                elif self.mode == "irepa":
+                elif self.mode in ["irepa", "dog"]:
                     # Spatial grid channel-wise cosine similarity
                     loss_repa = - F.cosine_similarity(z_hat, z_target, dim=1).mean()
 
