@@ -71,3 +71,74 @@ A lower FID score is better. A score of $0.0$ means the generated distribution p
 - **Resolution**: Inception-v3 expects 299x299 images. Standard FID libraries handle this resizing automatically, but be aware it happens under the hood
 
 The easiest and most robust way to calculate FID in modern PyTorch pipelines is using the `torchmetrics` library, which avoids manual matrix square root calculations.
+
+# iREPA (Improved Representational Alignment)
+## Intro
+iREPA is a highly efficient enhancement to the vanilla REPA training recipe for diffusion models. While traditional REPA aligns the intermediate layers of a diffusion transformer with the representations of a frozen, pre-trained teacher model, iREPA makes targeted structural changes to this alignment process.
+
+Implemented in fewer than four lines of code, iREPA dramatically accelerates convergence speed, stabilizes training, and yields significantly lower FID scores compared to the baseline.
+
+## iREPA vs REPA
+- Projection Head:
+  - REPA: 2-layer MLP applied per patch token
+  - iREPA: single 3x3 convolutional layer (padding 1)
+- Teacher Target:
+  - REPA: raw, unmodified feature maps from the frozen encoder
+  - iREPA: spatially normalized feature maps (global spatial mean removed)
+- Primary Focus
+  - REPA: global semantic alignment ("What is this object?")
+  - iREPA: spatial structure alignment ("How are the parts of this object arranged?")
+
+## Motivation
+When vanilla REPA was introduced, the prevailing assumption was that it worked because it injected "global semantic information" into the diffusion model. 
+Researchers assumed that teachers with better linear probing accuracy on ImageNet would naturally produce better diffusion models.
+
+However, the authors of iREPA discovered that this assumption was backwards:
+- Spatial discovery: high global semantic accuracy correlates poorly with generation quality. Instead, **spatial structure** (how well the model maps out local correlations and boundaries) is the true driver of generation performance.
+- Problem with MLPs: Standard MLPs process each patch independently. When an MLP maps the diffusion features to the teacher's dimension, it discards vital local spatial relationships
+- Problem with Raw Features: Pre-trained teacher tokens often have a massive "global component". For example, if the image is a tomato, the semantic signal for "tomato" is so loud across the entire image that it masks the nuanced local contrasts (like the edge of a leaf))
+
+iREPA fixes this by stripping away the overpowering global signal from the teacher and using convolutions to preserve the student's spatial layout.
+
+## The Math
+The standard diffusion loss $L_\text{diff}$ remains unchanged. However, we modify how we prepare the variables for the alingment loss $L_\text{REPA}$
+
+1. **Spatial Normalization (Teacher)**
+   - Let $z_0$ be the features extracted from the teacher from the clean image. Instead of using $z_0$ directly, we suppress the global semantic overlay by calculating the mean $\mu$ across all spatial patches and subtracting it to get the normalized target $\tilde z_0$
+   - $\tilde z_0 = z_0 - \mu(z_0)$
+   - _Note: some implementations also divide by the spatial standard deviation, functioning similarly to Instance Normalization without affine parameters_
+2. **Convolutional Projection (Student)**
+   - Let $h_t$ be the hidden representations of the diffusion model at target layer $L$. Instead of applying a multi-layered perceptron, we map the student's hidden dimension to the teacher's dimension using a Convolutional head $C_\psi$
+   - $\hat z = C_\psi (h_t)$
+3. **Alignment Loss**
+   - We then compute the loss (e.g., negative cosine similarity or Mean Squared Error) between the spatially preserved student features and the normalized teacher features:
+   - $L_\text{iREPA} = -\frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, 1}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, i} \|_2}$
+
+
+# Spectrum Matching Extension
+The core thesis of the paper is the spectrum matching hypothesis, which states that for a diffusion model to learn efficiently, the target latent representation must posses a specific, flattened power-law power spectral density.
+
+While the authors initially apply this to Variational Autoencoder (VAE) latents, they extend this spectral view to Representational Alignment. By analyzing REPA through the lens of spatial frequencies, they prove that the "directional spectral energy" of the frozen teacher's features is what truly drives student learning. To maximize this energy and isolate the most useful features, the authors introduce a Difference-of-Gaussians (DoG) band-pass filter as preprocessing step on the teacher's representations before alignment.
+
+## How it differs from REPA & iREPA
+To understand DoG-REPA, we must look at how the target teacher representations ($z_0$) are processed in previous methods:
+- **Vanilla REPA (The raw signal)**: Directly aligns the student's hidden states to the unmodified feature maps of the teacher. The problem? These raw features are heavily dominated by low-frequency, global semantic signals (e.g., "this whole image is a dog")
+- **iREPA (The high-pass filter)**: Normalizes the teacher features spatially by subtracting the global spatial mean. This strips away the overpowering global semantic signal, revealing local spatial structures.
+- **DoG-REPA / Spectrum Matching (The band-pass filter)**: The authors realized that iREPA only suppreses the lowest frequencies. Real target representations also contain high-frequency noise that hurts diffusion convergence. By applying a DoG filter, they create a true band-pass filter. This eliminates both the overwhelming low-frequency global semantics and the disruptive high-frequency noise, isolating the clean, mid-frequency spatial structures (Edges, boundaries) that the diffusion model needs most.
+
+## Motivation for New Method
+Why do we need a band-pass filter? The authors mathematically prove that pixel-space diffusion trained with a Mean Squared Error objective has an inherent bias: it allocates that vast majority of its modeling capacity and gradient signals to low and mid spatial frequencies.
+
+Natural images inherently follow a power-law distribution where low frequencies dominate the energy. When we use raw teacher features (like in vanilla REPA), the low-frequency "global" signal is so loud that the student model essentially ignores the structural nuances. iREPA proved that removing the mean helped, but the Spectrum Matching view formalizes why: diffusion models need high-energy, mid-frequency directional gradients to construct spatial layouts. The DoG filter is the mathematically optimal way to extract this specific frequency band from the teacher. 
+
+## Math
+The alignment loss requires preparing the teacher's target representation.
+
+1. Extract Teacher Features: Feed the clean image $x_0$ to the frozen teacher $E_\phi$ to get the raw features $z_0$.
+2. Apply Difference of Gaussians: Instead of using $z_0$ directly, we apply two Gaussian blur kernels with different standard deviations ($\sigma_1$ and $\sigma_2$, where $\sigma_1 < \sigma_2$)
+   - $G_{\sigma_1}(z_0)$ removes the extreme high-frequency noise
+   - $G_{\sigma_2}(z_0) captures the low-frequency global trend$
+   - subtracting them leaves only the mid-frequency spatial structures
+3. Project Student Features: As in iREPA, use a lightweight Convolutional head $C_\psi$ to map the student's hidden states $h_t$ to the teacher's dimension: $\hat z = C_\psi(h_t)$
+4. Alignment Loss: Calculate the negative cosine similarity between the projected student features and the DoG-filtered teacher features:
+   - $L_{DoG} = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2}$
