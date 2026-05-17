@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoModel
-from diffusers import DiTTransformer2DModel, AutoencoderKL
+from diffusers import Transformer2DModel, AutoencoderKL
 from typing import Tuple, Dict
 from torchvision.transforms.functional import gaussian_blur
 
@@ -42,7 +42,7 @@ class iREPAProjectionHead(nn.Module):
 class REPAWrapper(nn.Module):
     def __init__(
             self,
-            student_model_id: str = "facebook/DiT-XL-2-256",
+            student_model_id: str = "BiliSakura/SiT-diffusers",
             teacher_model_id: str = "facebook/dinov2-base",
             vae_model_id: str = "stabilityai/sd-vae-ft-mse",
             target_layer_ratio: float = 0.4,
@@ -50,7 +50,6 @@ class REPAWrapper(nn.Module):
     ):
         super().__init__()
         self.mode = mode.lower()
-        # ADDED "dog" VALIDATION
         assert self.mode in ["vanilla", "repa", "irepa", "dog"], f"Unknown mode: {mode}"
 
         self.device = torch.device(
@@ -79,10 +78,29 @@ class REPAWrapper(nn.Module):
         for param in self.teacher.parameters(): param.requires_grad = False
         for param in self.vae.parameters(): param.requires_grad = False
 
-        # 2. Initialize Student (Maintained in FP32)
-        student_config = DiTTransformer2DModel.load_config(student_model_id, subfolder="transformer")
-        self.student = DiTTransformer2DModel.from_config(student_config).to(self.device)
+        # 2. Initialize Student Architecture (Without Pretrained Weights)
+        raw_config = Transformer2DModel.load_config(student_model_id, subfolder="SiT-S-2-256-diffusers/transformer")
 
+        # Safely extract legacy architecture dimensions
+        hidden_size = raw_config.get("hidden_size", 384)
+        num_heads = raw_config.get("num_heads", 6)
+
+        # Explicitly map and instantiate to bypass the broken diffusers legacy parser
+        model_kwargs = {
+            "sample_size": raw_config.get("input_size", 32),
+            "patch_size": 2,
+            "in_channels": 4,
+            "out_channels": 8,  # SiT predicts both noise (4) and variance (4)
+            "num_layers": raw_config.get("depth", 12),
+            "num_attention_heads": num_heads,
+            "attention_head_dim": hidden_size // num_heads,  # 384 // 6 = 64
+            "norm_type": "ada_norm_zero",
+            "activation_fn": "gelu-approximate",
+            "num_embeds_ada_norm": raw_config.get("num_classes", 1000),
+        }
+
+        self.student = Transformer2DModel(**model_kwargs).to(self.device)
+        
         if hasattr(self.student, "enable_xformers_memory_efficient_attention") and self.device.type == "cuda":
             try:
                 self.student.enable_xformers_memory_efficient_attention()
@@ -95,12 +113,16 @@ class REPAWrapper(nn.Module):
         self._register_hook(target_layer_idx)
 
         # 4. Initialize Alignment Projection Heads dynamically
-        student_dim = self.student.config.num_attention_heads * self.student.config.attention_head_dim
+        if hasattr(self.student.config, "inner_dim"):
+            student_dim = self.student.config.inner_dim
+        else:
+            student_dim = self.student.config.num_attention_heads * self.student.config.attention_head_dim
+
         teacher_dim = self.teacher.config.hidden_size
 
         if self.mode == "repa":
             self.proj_head = ProjectionHead(student_dim, teacher_dim).to(self.device)
-        elif self.mode in ["irepa", "dog"]:  # DOG USES THE SAME CONV HEAD AS iREPA
+        elif self.mode in ["irepa", "dog"]:
             self.proj_head = iREPAProjectionHead(student_dim, teacher_dim).to(self.device)
         else:
             self.proj_head = nn.Identity()
@@ -143,7 +165,7 @@ class REPAWrapper(nn.Module):
         elif self.mode in ["irepa", "dog"]:
             # Reshape representations into 2D spatial grids
             h_t_spatial = h_t.transpose(1, 2).view(B, D_s, H_s, H_s)
-            z_hat_spatial = self.proj_head(h_t_spatial)  # [B, D_t, H_s, H_s]
+            z_hat_spatial = self.proj_head(h_t_spatial)
 
             z_0_spatial = z_0.transpose(1, 2).view(B, D_t, H_t, H_t)
 

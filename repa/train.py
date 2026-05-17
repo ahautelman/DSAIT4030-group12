@@ -42,7 +42,13 @@ class DiffusionTrainer:
         # 3. Execution Pass
         with torch.autocast(device_type=self.device.type, dtype=self.dtype):
             student_outputs = self.wrapper.student(x_t, timestep=timesteps, class_labels=class_labels)
-            predicted_noise, _ = student_outputs.sample.chunk(2, dim=1)
+
+            # Safe Chunking: Handle variance channels only if the model predicts them
+            output_sample = student_outputs.sample
+            if output_sample.shape[1] == latents_0.shape[1] * 2:
+                predicted_noise, _ = output_sample.chunk(2, dim=1)
+            else:
+                predicted_noise = output_sample
 
             if self.mode != "vanilla":
                 h_t = self.wrapper.hidden_states['h_t'].contiguous()

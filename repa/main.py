@@ -1,3 +1,4 @@
+# main.py
 import argparse
 import os
 import shutil
@@ -16,7 +17,7 @@ from utils import ExperimentLogger
 from train import DiffusionTrainer
 
 
-def find_max_batch_size(trainer, starting_batch=64):
+def find_max_batch_size(trainer, starting_batch=256):
     current_batch = starting_batch
     device = trainer.device
     print(f"Starting automatic batch size finder from {starting_batch}...")
@@ -39,7 +40,7 @@ def find_max_batch_size(trainer, starting_batch=64):
 
         except RuntimeError as e:
             if "out of memory" in str(e).lower() or "not enough memory" in str(e).lower():
-                current_batch -= 8
+                current_batch -= 32
                 trainer.optimizer.zero_grad(set_to_none=True)
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -57,16 +58,17 @@ def get_infinite_dataloader(dataloader):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="./data")
+    parser.add_argument("--data_dir", type=str, default=".././data")
     parser.add_argument("--dataset_name", type=str, default="celeba")
     parser.add_argument("--output_dir", type=str, default="./output")
-    parser.add_argument("--max_steps", type=int, default=8_000)
+    parser.add_argument("--max_steps", type=int, default=12_000)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa", "dog"], default="dog",
                         help="Structural alignment methodology variant to implement")
     parser.add_argument("--lambda_repa", type=float, default=0.1)
-    parser.add_argument("--eval_interval", type=int, default=2000)
+    parser.add_argument("--num_evals", type=int, default=60,
+                        help="Target number of evaluations during training")
     parser.add_argument("--num_eval_images", type=int, default=250)
     args = parser.parse_args()
 
@@ -89,7 +91,9 @@ def main():
     # 4. Auto-Batch Optimization
     optimal_batch_size = args.batch_size if args.batch_size else find_max_batch_size(trainer, starting_batch=64)
 
-    eval_step_interval = max(1, args.eval_interval // optimal_batch_size)
+    # Calculate step interval to hit the target number of evaluations
+    eval_step_interval = max(1, args.max_steps // args.num_evals)
+
     dataloader = get_celeba_dataloader(args.data_dir, optimal_batch_size)
     data_iterator = get_infinite_dataloader(dataloader)
 

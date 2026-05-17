@@ -54,11 +54,17 @@ def generate_and_save_images(
                 )
                 student_output = wrapper.student(
                     latents,
-                    t_batch,
+                    timestep=t_batch,
                     class_labels=class_labels
-                ).sample
-                noise_pred, _ = student_output.chunk(2, dim=1)
+                )
                 
+                # Safe Chunking during inference
+                output_sample = student_output.sample
+                if output_sample.shape[1] == latent_channels * 2:
+                    noise_pred, _ = output_sample.chunk(2, dim=1)
+                else:
+                    noise_pred = output_sample
+
                 latents = scheduler.step(noise_pred, t, latents).prev_sample
 
         latents = latents / wrapper.vae.config.scaling_factor
@@ -78,6 +84,6 @@ def compute_fid(real_stats_name: str, generated_dir: str, device: torch.device, 
         dataset_res=resolution,
         dataset_split="custom",
         device=device,
-        num_workers=0       # to prevent multiprocessing crash
+        num_workers=0  # to prevent multiprocessing crash
     )
     return score
