@@ -61,15 +61,16 @@ def main():
     parser.add_argument("--data_dir", type=str, default=".././data")
     parser.add_argument("--dataset_name", type=str, default="celeba")
     parser.add_argument("--output_dir", type=str, default="./output")
-    parser.add_argument("--max_steps", type=int, default=12_000)
+    parser.add_argument("--max_steps", type=int, default=30_000)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa", "dog"], default="dog",
                         help="Structural alignment methodology variant to implement")
-    parser.add_argument("--lambda_repa", type=float, default=0.1)
-    parser.add_argument("--num_evals", type=int, default=60,
+    parser.add_argument("--lambda_repa", type=float, default=0.5,
+                        help="Weighting factor for the alignment loss component. Recommended: use 0.2 for REPA, 0.5 for iREPA / DoG.")
+    parser.add_argument("--num_evals", type=int, default=40,
                         help="Target number of evaluations during training")
-    parser.add_argument("--num_eval_images", type=int, default=250)
+    parser.add_argument("--num_eval_images", type=int, default=2_000)
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)

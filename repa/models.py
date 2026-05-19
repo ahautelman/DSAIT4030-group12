@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 from transformers import AutoModel
 from diffusers import Transformer2DModel, AutoencoderKL
 from typing import Tuple, Dict
@@ -118,7 +119,8 @@ class REPAWrapper(nn.Module):
         else:
             student_dim = self.student.config.num_attention_heads * self.student.config.attention_head_dim
 
-        teacher_dim = self.teacher.config.hidden_size
+        # Use teacher's penultimate hidden layer
+        teacher_dim = self.teacher.config.hidden_size   # for DinoV2 uses the same hidden size across al layers
 
         if self.mode == "repa":
             self.proj_head = ProjectionHead(student_dim, teacher_dim).to(self.device)
@@ -139,13 +141,26 @@ class REPAWrapper(nn.Module):
             return torch.empty(0)
 
         x_0_teacher = F.interpolate(x_0, size=(224, 224), mode='bilinear', align_corners=False).to(self.compute_dtype)
+        
+        # Convert from VAE format [-1, 1] back to [0, 1]
+        x_0_teacher = (x_0_teacher + 1.0) / 2.0
+
+        # Apply ImageNet normalization for DINOv2
+        x_0_teacher = TF.normalize(
+            x_0_teacher,
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ).to(self.compute_dtype)
+        
         with torch.no_grad():
-            outputs = self.teacher(pixel_values=x_0_teacher)
-            z_0 = outputs.last_hidden_state
+            outputs = self.teacher(pixel_values=x_0_teacher, output_hidden_states=True)
+            # Extract penultimate layer (-2)
+            z_0 = outputs.hidden_states[-2]
+            
             # Clip off CLS token if present
             if z_0.shape[1] > (x_0_teacher.shape[2] // 14) * (x_0_teacher.shape[3] // 14):
                 z_0 = z_0[:, 1:, :]
-        return z_0
+        return z_0.detach()     # detach to prevent accidental graph tracking
 
     def align_features(self, h_t: torch.Tensor, z_0: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         B, N_s, D_s = h_t.shape
@@ -181,7 +196,7 @@ class REPAWrapper(nn.Module):
             else:
                 # DoG: Difference of Gaussians (Spectrum Matching Hypothesis)
                 # Apply band-pass filtering to isolate mid-frequency directional energy
-                blur1 = gaussian_blur(z_0_spatial, kernel_size=[5, 5], sigma=[1.0, 1.0])
+                blur1 = gaussian_blur(z_0_spatial, kernel_size=[3, 3], sigma=[0.6, 0.6])
                 blur2 = gaussian_blur(z_0_spatial, kernel_size=[5, 5], sigma=[2.0, 2.0])
                 z_0_target = blur1 - blur2
 

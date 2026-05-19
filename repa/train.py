@@ -55,18 +55,26 @@ class DiffusionTrainer:
                 z_hat, z_target = self.wrapper.align_features(h_t, z_0)
 
                 if self.mode == "repa":
-                    # Token sequence cosine similarity
-                    loss_repa = - F.cosine_similarity(z_hat, z_target, dim=-1).mean()
+                    # Token sequence cosine similarity: mean over tokens (dim=1), output is [B]
+                    loss_repa_per_sample = - F.cosine_similarity(z_hat, z_target, dim=-1).mean(dim=1)
                 elif self.mode in ["irepa", "dog"]:
-                    # Spatial grid channel-wise cosine similarity
-                    loss_repa = - F.cosine_similarity(z_hat, z_target, dim=1).mean()
+                    # Spatial grid: mean over spatial dims H and W, output is [B]
+                    loss_repa_per_sample = - F.cosine_similarity(z_hat, z_target, dim=1).mean(dim=[1, 2])
+                
+                # Timestep dependent weighting
+                t_norm = timesteps.float() / self.noise_scheduler.config.num_train_timesteps
+                
+                # Stronger alignment at low noise (t->0), weaker to high noise (t->1000)
+                dynamic_lambda = self.lambda_repa * (1.0 - t_norm)
 
+                loss_repa = (loss_repa_per_sample * dynamic_lambda).mean()
                 loss_repa_val = loss_repa.item()
             else:
                 loss_repa = 0.0
+                dynamic_lambda = 0.0
 
             loss_diff = F.mse_loss(predicted_noise, noise)
-            loss_total = loss_diff + (self.lambda_repa * loss_repa if self.mode != "vanilla" else 0.0)
+            loss_total = loss_diff + loss_repa
 
         # 4. Optimize
         self.scaler.scale(loss_total).backward()

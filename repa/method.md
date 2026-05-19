@@ -17,7 +17,7 @@ drastically accelerating convergence and improving final generation quality.
 The objective combines standard generative loss with an auxiliary alignment loss
 - $x_0$: Clean input image
 - $x_t$: Noisy image at timestep $t$
-- **Teacher Encoder $E_\phi$**: Frozen, pretrained vision transformer (e.g., DINOv2). It extracts structural features from the clean image: $z_0 = E_\phi(x_0)$
+- **Teacher Encoder $E_\phi$**: Frozen, pretrained vision transformer (e.g., DINOv2). It extracts structural features from the penultimate layer of the clean image: $z_0 = E_\phi(x_0)$. The penultimate layer is preferred as it retains more structure-rich information compared to the final classification layer.
 - **Generative Model $F_\theta$**: Diffusion model being trained. Conceptually split into early layers ($F_\text{early}$) and late layers ($F_\text{late}$)
 - **Intermediary Representation $h_t$**: Internal features of the diffusion model at a specific target layer $L$. $h_t = F_\text{early}(x_t, t)$
 - **Projection Head $P_\psi$**: Tiny network (usually a 2-layer MLP) that maps the diffusion model's hidden dimension to the teacher's dimension $\hat z = P_\psi(h_t)$
@@ -31,8 +31,9 @@ The objective combines standard generative loss with an auxiliary alignment loss
 - $L_\text{REPA} = - \frac{1}{N} \sum_{i=1}^N \frac{P_\psi(h_t, i) \cdot z_{0, i}}{\| P_\psi(h_t, i \|_2 \| z_{o, i} \|_2}$
 
 **Total Objective**
-- $L_\text{total} = L_\text{diff} + \lambda L_\text{REPA}$
-- $\lambda$ is a weighting hyperparameter, often constant like $0.1$ or scaled by the timestamp.
+- $L_\text{total} = L_\text{diff} + \lambda(t) L_\text{REPA}$
+- $\lambda(t) = \lambda_0 \cdot (1 - t_\text{norm})$ where $t_\text{norm} = t / T$ is the normalized timestep. This dynamic weighting strengthens alignment when the image has low noise (early in denoising, where structure matters most) and weakens it when the image is nearly pure noise.
+- For vanilla REPA: $\lambda_0 = 0.2$ (aligns with original paper). For methods with convolutional projection heads (iREPA, DoG): $\lambda_0 = 0.5$ (stronger gradients needed for spatial alignment).
 
 
 ## Data Flow
@@ -101,10 +102,10 @@ However, the authors of iREPA discovered that this assumption was backwards:
 iREPA fixes this by stripping away the overpowering global signal from the teacher and using convolutions to preserve the student's spatial layout.
 
 ## The Math
-The standard diffusion loss $L_\text{diff}$ remains unchanged. However, we modify how we prepare the variables for the alingment loss $L_\text{REPA}$
+The standard diffusion loss $L_\text{diff}$ remains unchanged. However, we modify how we prepare the variables for the alignment loss. Features are extracted from the teacher's penultimate hidden layer (more structure-rich than the final layer).
 
 1. **Spatial Normalization (Teacher)**
-   - Let $z_0$ be the features extracted from the teacher from the clean image. Instead of using $z_0$ directly, we suppress the global semantic overlay by calculating the mean $\mu$ across all spatial patches and subtracting it to get the normalized target $\tilde z_0$
+   - Let $z_0$ be the features extracted from the teacher's penultimate layer. Instead of using $z_0$ directly, we suppress the global semantic overlay by calculating the mean $\mu$ across all spatial patches and subtracting it to get the normalized target $\tilde z_0$
    - $\tilde z_0 = z_0 - \mu(z_0)$
    - _Note: some implementations also divide by the spatial standard deviation, functioning similarly to Instance Normalization without affine parameters_
 2. **Convolutional Projection (Student)**
@@ -113,6 +114,8 @@ The standard diffusion loss $L_\text{diff}$ remains unchanged. However, we modif
 3. **Alignment Loss**
    - We then compute the loss (e.g., negative cosine similarity or Mean Squared Error) between the spatially preserved student features and the normalized teacher features:
    - $L_\text{iREPA} = -\frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, 1}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, i} \|_2}$
+   - This loss is scaled dynamically by timestep: $L_\text{iREPA}(t) = L_\text{iREPA} \cdot (1 - t_\text{norm})$
+4. **Recommended hyperparameter**: $\lambda_0 = 0.5$ for convolutional projection (stronger gradients needed for spatial structure learning)
 
 
 # Spectrum Matching Extension
@@ -132,13 +135,19 @@ Why do we need a band-pass filter? The authors mathematically prove that pixel-s
 Natural images inherently follow a power-law distribution where low frequencies dominate the energy. When we use raw teacher features (like in vanilla REPA), the low-frequency "global" signal is so loud that the student model essentially ignores the structural nuances. iREPA proved that removing the mean helped, but the Spectrum Matching view formalizes why: diffusion models need high-energy, mid-frequency directional gradients to construct spatial layouts. The DoG filter is the mathematically optimal way to extract this specific frequency band from the teacher. 
 
 ## Math
-The alignment loss requires preparing the teacher's target representation.
+The alignment loss requires preparing the teacher's target representation using the penultimate layer (which contains more fine-grained structural information).
 
-1. Extract Teacher Features: Feed the clean image $x_0$ to the frozen teacher $E_\phi$ to get the raw features $z_0$.
-2. Apply Difference of Gaussians: Instead of using $z_0$ directly, we apply two Gaussian blur kernels with different standard deviations ($\sigma_1$ and $\sigma_2$, where $\sigma_1 < \sigma_2$)
-   - $G_{\sigma_1}(z_0)$ removes the extreme high-frequency noise
-   - $G_{\sigma_2}(z_0) captures the low-frequency global trend$
-   - subtracting them leaves only the mid-frequency spatial structures
-3. Project Student Features: As in iREPA, use a lightweight Convolutional head $C_\psi$ to map the student's hidden states $h_t$ to the teacher's dimension: $\hat z = C_\psi(h_t)$
-4. Alignment Loss: Calculate the negative cosine similarity between the projected student features and the DoG-filtered teacher features:
-   - $L_{DoG} = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2}$
+1. **Extract Teacher Features**: Feed the clean image $x_0$ to the frozen teacher $E_\phi$ using its penultimate hidden layer to get raw features $z_0$.
+2. **Apply Difference of Gaussians**: Instead of using $z_0$ directly, we apply two Gaussian blur kernels with different standard deviations ($\sigma_1$ and $\sigma_2$, where $\sigma_1 < \sigma_2$)
+   - $G_{\sigma_1}(z_0)$ removes extreme high-frequency noise
+   - $G_{\sigma_2}(z_0)$ captures the low-frequency global trend
+   - Subtracting them leaves only the mid-frequency spatial structures
+   - **Kernel Selection**: For your specific teacher model:
+     - Low frequencies (global): $\sigma \approx 0.15\text{-}0.25 \times \text{grid\_width}$
+     - High frequencies (jitter): $\sigma \approx 0.5\text{-}1.0$ (blends adjacent tokens only)
+     - Use kernel size $K = 4\sigma + 1$ (rounded to nearest odd), or intentionally truncate if exceeding 30% of grid width
+     - Validate by examining the Power Spectral Density (PSD) of teacher features: DC component should be zero, mid-frequency energy preserved, high frequencies declining smoothly toward zero
+3. **Project Student Features**: As in iREPA, use a lightweight Convolutional head $C_\psi$ to map the student's hidden states $h_t$ to the teacher's dimension: $\hat z = C_\psi(h_t)$
+4. **Alignment Loss**: Calculate the negative cosine similarity between projected student features and DoG-filtered teacher features, scaled dynamically by timestep:
+   - $L_{DoG}(t) = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2} \times (1 - t_\text{norm})$
+5. **Recommended hyperparameter**: $\lambda_0 = 0.5$ (convolutional projection requires stronger gradients)
