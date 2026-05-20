@@ -64,8 +64,8 @@ class DiffusionTrainer:
                 # Timestep dependent weighting
                 t_norm = timesteps.float() / self.noise_scheduler.config.num_train_timesteps
                 
-                # Stronger alignment at low noise (t->0), weaker to high noise (t->1000)
-                dynamic_lambda = self.lambda_repa * (1.0 - t_norm)
+                # Stronger alignment at high noise (t->1000), weaker to low noise (t->0)
+                dynamic_lambda = self.lambda_repa * t_norm
 
                 loss_repa = (loss_repa_per_sample * dynamic_lambda).mean()
                 loss_repa_val = loss_repa.item()
