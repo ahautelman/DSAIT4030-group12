@@ -48,3 +48,5 @@ uv run python <your_script.py>
 - **Run with specific Python version**: `uv run --python 3.13 python main.py`
 
 For more information about `uv`, visit the [official documentation](https://docs.astral.sh/uv/).
+
+# TODO: how to add data to project

@@ -1,0 +1,602 @@
+[
+    {
+        "timestamp": "2026-05-17T23:57:38.519505",
+        "global_step": 200,
+        "loss_diff": 0.2974870204925537,
+        "loss_repa": 0.0,
+        "loss_total": 0.2974870204925537,
+        "fid_score": 351.0746429063679,
+        "ram_usage_mb": 1577.45,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:01:00.285500",
+        "global_step": 400,
+        "loss_diff": 0.2999095916748047,
+        "loss_repa": 0.0,
+        "loss_total": 0.2999095916748047,
+        "fid_score": 336.4423856975326,
+        "ram_usage_mb": 1652.28,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:04:32.785597",
+        "global_step": 600,
+        "loss_diff": 0.13013401627540588,
+        "loss_repa": 0.0,
+        "loss_total": 0.13013401627540588,
+        "fid_score": 332.54329576587634,
+        "ram_usage_mb": 1321.42,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:08:06.242427",
+        "global_step": 800,
+        "loss_diff": 0.20341110229492188,
+        "loss_repa": 0.0,
+        "loss_total": 0.20341110229492188,
+        "fid_score": 304.35788397155204,
+        "ram_usage_mb": 1318.53,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:11:40.288950",
+        "global_step": 1000,
+        "loss_diff": 0.10333514213562012,
+        "loss_repa": 0.0,
+        "loss_total": 0.10333514213562012,
+        "fid_score": 318.48433141752423,
+        "ram_usage_mb": 1050.38,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:15:16.949826",
+        "global_step": 1200,
+        "loss_diff": 0.166096031665802,
+        "loss_repa": 0.0,
+        "loss_total": 0.166096031665802,
+        "fid_score": 310.8553206751361,
+        "ram_usage_mb": 991.75,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:18:52.952240",
+        "global_step": 1400,
+        "loss_diff": 0.08242964744567871,
+        "loss_repa": 0.0,
+        "loss_total": 0.08242964744567871,
+        "fid_score": 323.4235972050416,
+        "ram_usage_mb": 1122.53,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:22:28.816228",
+        "global_step": 1600,
+        "loss_diff": 0.1616002470254898,
+        "loss_repa": 0.0,
+        "loss_total": 0.1616002470254898,
+        "fid_score": 308.6362348832825,
+        "ram_usage_mb": 1028.97,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:26:05.816481",
+        "global_step": 1800,
+        "loss_diff": 0.17510442435741425,
+        "loss_repa": 0.0,
+        "loss_total": 0.17510442435741425,
+        "fid_score": 311.72901798273404,
+        "ram_usage_mb": 1030.22,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:29:40.020718",
+        "global_step": 2000,
+        "loss_diff": 0.1728023737668991,
+        "loss_repa": 0.0,
+        "loss_total": 0.1728023737668991,
+        "fid_score": 296.86610974299407,
+        "ram_usage_mb": 1041.14,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:33:15.462621",
+        "global_step": 2200,
+        "loss_diff": 0.1726648211479187,
+        "loss_repa": 0.0,
+        "loss_total": 0.1726648211479187,
+        "fid_score": 292.49143826047765,
+        "ram_usage_mb": 1090.23,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:36:50.805655",
+        "global_step": 2400,
+        "loss_diff": 0.16847015917301178,
+        "loss_repa": 0.0,
+        "loss_total": 0.16847015917301178,
+        "fid_score": 288.96636784333487,
+        "ram_usage_mb": 1081.27,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:40:26.644750",
+        "global_step": 2600,
+        "loss_diff": 0.15420883893966675,
+        "loss_repa": 0.0,
+        "loss_total": 0.15420883893966675,
+        "fid_score": 302.23506210228544,
+        "ram_usage_mb": 1089.17,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:44:02.272019",
+        "global_step": 2800,
+        "loss_diff": 0.24226528406143188,
+        "loss_repa": 0.0,
+        "loss_total": 0.24226528406143188,
+        "fid_score": 258.270610675135,
+        "ram_usage_mb": 1129.16,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:47:37.611507",
+        "global_step": 3000,
+        "loss_diff": 0.12543648481369019,
+        "loss_repa": 0.0,
+        "loss_total": 0.12543648481369019,
+        "fid_score": 263.30696382539986,
+        "ram_usage_mb": 1144.06,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:51:13.429217",
+        "global_step": 3200,
+        "loss_diff": 0.1615041196346283,
+        "loss_repa": 0.0,
+        "loss_total": 0.1615041196346283,
+        "fid_score": 254.86144055745183,
+        "ram_usage_mb": 1146.78,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:54:49.159834",
+        "global_step": 3400,
+        "loss_diff": 0.18553724884986877,
+        "loss_repa": 0.0,
+        "loss_total": 0.18553724884986877,
+        "fid_score": 250.7285434039162,
+        "ram_usage_mb": 1143.5,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T00:58:24.809050",
+        "global_step": 3600,
+        "loss_diff": 0.21143731474876404,
+        "loss_repa": 0.0,
+        "loss_total": 0.21143731474876404,
+        "fid_score": 264.7756113571369,
+        "ram_usage_mb": 1180.17,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:02:00.440914",
+        "global_step": 3800,
+        "loss_diff": 0.26371896266937256,
+        "loss_repa": 0.0,
+        "loss_total": 0.26371896266937256,
+        "fid_score": 263.99291828174876,
+        "ram_usage_mb": 1195.31,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:05:36.278414",
+        "global_step": 4000,
+        "loss_diff": 0.18974918127059937,
+        "loss_repa": 0.0,
+        "loss_total": 0.18974918127059937,
+        "fid_score": 202.84832028161813,
+        "ram_usage_mb": 1169.72,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:09:12.053191",
+        "global_step": 4200,
+        "loss_diff": 0.19574475288391113,
+        "loss_repa": 0.0,
+        "loss_total": 0.19574475288391113,
+        "fid_score": 207.50065752083887,
+        "ram_usage_mb": 1191.84,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:12:47.716055",
+        "global_step": 4400,
+        "loss_diff": 0.08365237712860107,
+        "loss_repa": 0.0,
+        "loss_total": 0.08365237712860107,
+        "fid_score": 194.0451522213949,
+        "ram_usage_mb": 1111.22,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:16:24.668258",
+        "global_step": 4600,
+        "loss_diff": 0.14574265480041504,
+        "loss_repa": 0.0,
+        "loss_total": 0.14574265480041504,
+        "fid_score": 229.30143567530175,
+        "ram_usage_mb": 1102.73,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:20:01.266986",
+        "global_step": 4800,
+        "loss_diff": 0.08011190593242645,
+        "loss_repa": 0.0,
+        "loss_total": 0.08011190593242645,
+        "fid_score": 212.08010680128513,
+        "ram_usage_mb": 1147.52,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:23:38.345675",
+        "global_step": 5000,
+        "loss_diff": 0.20774932205677032,
+        "loss_repa": 0.0,
+        "loss_total": 0.20774932205677032,
+        "fid_score": 190.93022104602815,
+        "ram_usage_mb": 1147.08,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:27:14.704292",
+        "global_step": 5200,
+        "loss_diff": 0.1565723419189453,
+        "loss_repa": 0.0,
+        "loss_total": 0.1565723419189453,
+        "fid_score": 210.34613337125762,
+        "ram_usage_mb": 1170.23,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:30:51.295946",
+        "global_step": 5400,
+        "loss_diff": 0.27302390336990356,
+        "loss_repa": 0.0,
+        "loss_total": 0.27302390336990356,
+        "fid_score": 199.0341342486692,
+        "ram_usage_mb": 1186.48,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:34:27.823424",
+        "global_step": 5600,
+        "loss_diff": 0.18849554657936096,
+        "loss_repa": 0.0,
+        "loss_total": 0.18849554657936096,
+        "fid_score": 192.21674259334108,
+        "ram_usage_mb": 1218.2,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:38:04.847527",
+        "global_step": 5800,
+        "loss_diff": 0.1799517720937729,
+        "loss_repa": 0.0,
+        "loss_total": 0.1799517720937729,
+        "fid_score": 214.41857389595089,
+        "ram_usage_mb": 1190.08,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:41:41.135517",
+        "global_step": 6000,
+        "loss_diff": 0.09399760514497757,
+        "loss_repa": 0.0,
+        "loss_total": 0.09399760514497757,
+        "fid_score": 173.6583705936465,
+        "ram_usage_mb": 1136.42,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:45:18.320404",
+        "global_step": 6200,
+        "loss_diff": 0.10777115821838379,
+        "loss_repa": 0.0,
+        "loss_total": 0.10777115821838379,
+        "fid_score": 187.5905679563062,
+        "ram_usage_mb": 1111.55,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:48:55.297543",
+        "global_step": 6400,
+        "loss_diff": 0.2110264003276825,
+        "loss_repa": 0.0,
+        "loss_total": 0.2110264003276825,
+        "fid_score": 200.46039811652173,
+        "ram_usage_mb": 1140.52,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:52:32.558240",
+        "global_step": 6600,
+        "loss_diff": 0.23912489414215088,
+        "loss_repa": 0.0,
+        "loss_total": 0.23912489414215088,
+        "fid_score": 183.12077738163146,
+        "ram_usage_mb": 1104.2,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:56:09.206250",
+        "global_step": 6800,
+        "loss_diff": 0.12246139347553253,
+        "loss_repa": 0.0,
+        "loss_total": 0.12246139347553253,
+        "fid_score": 204.74298679187257,
+        "ram_usage_mb": 1169.58,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T01:59:46.074763",
+        "global_step": 7000,
+        "loss_diff": 0.1279580295085907,
+        "loss_repa": 0.0,
+        "loss_total": 0.1279580295085907,
+        "fid_score": 171.05897730794308,
+        "ram_usage_mb": 1189.75,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:03:24.602373",
+        "global_step": 7200,
+        "loss_diff": 0.1368725597858429,
+        "loss_repa": 0.0,
+        "loss_total": 0.1368725597858429,
+        "fid_score": 153.6986421985804,
+        "ram_usage_mb": 1114.94,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:07:01.859100",
+        "global_step": 7400,
+        "loss_diff": 0.11427159607410431,
+        "loss_repa": 0.0,
+        "loss_total": 0.11427159607410431,
+        "fid_score": 183.40605519496773,
+        "ram_usage_mb": 1214.05,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:10:38.362199",
+        "global_step": 7600,
+        "loss_diff": 0.27711135149002075,
+        "loss_repa": 0.0,
+        "loss_total": 0.27711135149002075,
+        "fid_score": 157.36076963745182,
+        "ram_usage_mb": 1221.52,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:14:14.842773",
+        "global_step": 7800,
+        "loss_diff": 0.13446852564811707,
+        "loss_repa": 0.0,
+        "loss_total": 0.13446852564811707,
+        "fid_score": 168.78244854969842,
+        "ram_usage_mb": 1119.19,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:17:52.421368",
+        "global_step": 8000,
+        "loss_diff": 0.12643000483512878,
+        "loss_repa": 0.0,
+        "loss_total": 0.12643000483512878,
+        "fid_score": 205.25966723125373,
+        "ram_usage_mb": 1224.27,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:21:31.028325",
+        "global_step": 8200,
+        "loss_diff": 0.17480623722076416,
+        "loss_repa": 0.0,
+        "loss_total": 0.17480623722076416,
+        "fid_score": 186.35411273368956,
+        "ram_usage_mb": 1170.48,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:25:07.668046",
+        "global_step": 8400,
+        "loss_diff": 0.037374347448349,
+        "loss_repa": 0.0,
+        "loss_total": 0.037374347448349,
+        "fid_score": 185.4204613262671,
+        "ram_usage_mb": 1261.94,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:28:44.187974",
+        "global_step": 8600,
+        "loss_diff": 0.07324662059545517,
+        "loss_repa": 0.0,
+        "loss_total": 0.07324662059545517,
+        "fid_score": 153.36845145189528,
+        "ram_usage_mb": 1226.16,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:32:22.272930",
+        "global_step": 8800,
+        "loss_diff": 0.08770990371704102,
+        "loss_repa": 0.0,
+        "loss_total": 0.08770990371704102,
+        "fid_score": 164.71744571056678,
+        "ram_usage_mb": 1144.73,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:35:59.983284",
+        "global_step": 9000,
+        "loss_diff": 0.07222670316696167,
+        "loss_repa": 0.0,
+        "loss_total": 0.07222670316696167,
+        "fid_score": 181.82168294483586,
+        "ram_usage_mb": 1174.22,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:39:36.332344",
+        "global_step": 9200,
+        "loss_diff": 0.12637963891029358,
+        "loss_repa": 0.0,
+        "loss_total": 0.12637963891029358,
+        "fid_score": 149.73620877931396,
+        "ram_usage_mb": 1181.05,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:43:13.746127",
+        "global_step": 9400,
+        "loss_diff": 0.07780500501394272,
+        "loss_repa": 0.0,
+        "loss_total": 0.07780500501394272,
+        "fid_score": 156.38458248360027,
+        "ram_usage_mb": 1095.75,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:46:50.550045",
+        "global_step": 9600,
+        "loss_diff": 0.16851772367954254,
+        "loss_repa": 0.0,
+        "loss_total": 0.16851772367954254,
+        "fid_score": 163.3109875637641,
+        "ram_usage_mb": 1076.45,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:50:26.786297",
+        "global_step": 9800,
+        "loss_diff": 0.11397003382444382,
+        "loss_repa": 0.0,
+        "loss_total": 0.11397003382444382,
+        "fid_score": 153.4134924484456,
+        "ram_usage_mb": 1091.95,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:54:03.419951",
+        "global_step": 10000,
+        "loss_diff": 0.14442002773284912,
+        "loss_repa": 0.0,
+        "loss_total": 0.14442002773284912,
+        "fid_score": 144.71384102407154,
+        "ram_usage_mb": 1154.05,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T02:57:40.223132",
+        "global_step": 10200,
+        "loss_diff": 0.17138823866844177,
+        "loss_repa": 0.0,
+        "loss_total": 0.17138823866844177,
+        "fid_score": 146.16977549393675,
+        "ram_usage_mb": 1163.41,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:01:17.156577",
+        "global_step": 10400,
+        "loss_diff": 0.13768655061721802,
+        "loss_repa": 0.0,
+        "loss_total": 0.13768655061721802,
+        "fid_score": 208.34457778199805,
+        "ram_usage_mb": 1270.3,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:04:54.614565",
+        "global_step": 10600,
+        "loss_diff": 0.2420710325241089,
+        "loss_repa": 0.0,
+        "loss_total": 0.2420710325241089,
+        "fid_score": 175.34204502904123,
+        "ram_usage_mb": 1282.97,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:08:31.922301",
+        "global_step": 10800,
+        "loss_diff": 0.08776362240314484,
+        "loss_repa": 0.0,
+        "loss_total": 0.08776362240314484,
+        "fid_score": 165.74935627751674,
+        "ram_usage_mb": 1219.28,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:12:08.893212",
+        "global_step": 11000,
+        "loss_diff": 0.15923240780830383,
+        "loss_repa": 0.0,
+        "loss_total": 0.15923240780830383,
+        "fid_score": 199.4942816387574,
+        "ram_usage_mb": 1143.02,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:15:45.198950",
+        "global_step": 11200,
+        "loss_diff": 0.185884028673172,
+        "loss_repa": 0.0,
+        "loss_total": 0.185884028673172,
+        "fid_score": 161.11373572070974,
+        "ram_usage_mb": 1185.17,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:19:21.924126",
+        "global_step": 11400,
+        "loss_diff": 0.2673690915107727,
+        "loss_repa": 0.0,
+        "loss_total": 0.2673690915107727,
+        "fid_score": 143.34686082569175,
+        "ram_usage_mb": 1171.14,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:22:59.297165",
+        "global_step": 11600,
+        "loss_diff": 0.12184520065784454,
+        "loss_repa": 0.0,
+        "loss_total": 0.12184520065784454,
+        "fid_score": 163.07744007786746,
+        "ram_usage_mb": 1060.97,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:26:36.322612",
+        "global_step": 11800,
+        "loss_diff": 0.13682350516319275,
+        "loss_repa": 0.0,
+        "loss_total": 0.13682350516319275,
+        "fid_score": 151.8361521610073,
+        "ram_usage_mb": 1230.55,
+        "gpu_memory_peak_mb": 0.0
+    },
+    {
+        "timestamp": "2026-05-18T03:30:13.966402",
+        "global_step": 12000,
+        "loss_diff": 0.18278241157531738,
+        "loss_repa": 0.0,
+        "loss_total": 0.18278241157531738,
+        "fid_score": 152.66979933362566,
+        "ram_usage_mb": 1199.97,
+        "gpu_memory_peak_mb": 0.0
+    }
+]

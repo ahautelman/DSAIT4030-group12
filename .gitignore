@@ -15,3 +15,6 @@ wheels/
 
 # Data files
 data/
+
+# Model checkpoints
+*.pt
