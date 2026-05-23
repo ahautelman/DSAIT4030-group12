@@ -1,9 +1,9 @@
-import os
 import json
+import os
+from typing import Dict, List
+
 import psutil
 import torch
-from datetime import datetime
-from typing import Dict, List
 
 
 class ExperimentLogger:

@@ -31,6 +31,7 @@ class ConvProjector(nn.Module):
         if x.ndim != 4:
             raise ValueError(f"ConvProjector expects [B, C, H, W], got {tuple(x.shape)}")
         return self.conv(x)
+    
 def _extract_teacher_channels(teacher_example: torch.Tensor) -> int:
     if teacher_example.ndim == 3:
         return teacher_example.shape[-1]
@@ -78,5 +79,3 @@ def build_projection_for_student(
         return ConvProjector(student_channels, teacher_channels, kernel=1)
 
     raise ValueError(f"Unsupported feature_shape_hint: {meta.feature_shape_hint!r}")
-
-

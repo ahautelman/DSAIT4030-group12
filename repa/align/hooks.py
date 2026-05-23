@@ -38,6 +38,8 @@ def register_feature_hook(model: torch.nn.Module, hook_target_name: str) -> Tupl
     state = {"ready": False, "value": None}
 
     def _hook(_module, _inputs, output):
+        if not _module.training:
+            return
         state["value"] = output[0] if isinstance(output, tuple) else output
         state["ready"] = True
 
