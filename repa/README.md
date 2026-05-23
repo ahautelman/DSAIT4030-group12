@@ -108,7 +108,7 @@ cd repa
 python main.py --mode vanilla --output_dir ./results/vanilla
 
 # 2. Train with REPA alignment
-python main.py --mode repa --lambda_repa 0.2 --output_dir ./results/repa
+python main.py --mode repa --lambda_repa 0.4 --output_dir ./results/repa
 
 # 3. Train with iREPA (spatial normalized) alignment
 python main.py --mode irepa --output_dir ./results/irepa
@@ -119,18 +119,18 @@ python main.py --mode dog --output_dir ./results/dog
 
 ### Command-Line Arguments
 
-| Argument | Default     | Description                                                                                           |
-|----------|-------------|-------------------------------------------------------------------------------------------------------|
-| `--mode` | `dog`       | Training objective: `vanilla`, `repa`, `irepa`, `dog`                                                 |
-| `--output_dir` | `./output`  | Directory to save checkpoints, logs, and metrics                                                      |
-| `--max_steps` | `30000`     | Total training steps                                                                                  |
-| `--batch_size` | Auto-detect | Batch size (auto-computed if not specified)                                                           |
-| `--lr` | `1e-4`      | Learning rate for AdamW optimizer                                                                     |
-| `--lambda_repa` | `0.5`       | Alignment loss weight: `L_total = L_diff + λ·L_repa`. Use `0.2` for REPA and `0.5` for iREPA & DoG. Internally weighted by noise level during training. |
-| `--num_evals` | `60`        | Target number of evaluation checkpoints (determines eval interval)                                    |
-| `--num_eval_images` | `250`       | Number of images generated per evaluation                                                             |
-| `--data_dir` | `../data`   | Path to CelebA dataset                                                                                |
-| `--dataset_name` | `celeba`    | Name for CleanFID statistics reference                                                                |
+| Argument | Default     | Description                                                                                                                                             |
+|----------|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--mode` | `dog`       | Training objective: `vanilla`, `repa`, `irepa`, `dog`                                                                                                   |
+| `--output_dir` | `./output`  | Directory to save checkpoints, logs, and metrics                                                                                                        |
+| `--max_steps` | `30000`     | Total training steps                                                                                                                                    |
+| `--batch_size` | Auto-detect | Batch size (auto-computed if not specified)                                                                                                             |
+| `--lr` | `1e-4`      | Learning rate for AdamW optimizer                                                                                                                       |
+| `--lambda_repa` | `1.0`       | Alignment loss weight: `L_total = L_diff + λ·L_repa`. Use `0.4` for REPA and `1.0` for iREPA & DoG. Internally weighted by noise level during training. |
+| `--num_evals` | `60`        | Target number of evaluation checkpoints (determines eval interval)                                                                                      |
+| `--num_eval_images` | `250`       | Number of images generated per evaluation                                                                                                               |
+| `--data_dir` | `../data`   | Path to CelebA dataset                                                                                                                                  |
+| `--dataset_name` | `celeba`    | Name for CleanFID statistics reference                                                                                                                  |
 
 ### Example with Custom Hyperparameters
 

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from time_embedding import TimeEmbedder
-from diffuser_blocks import *
+from diffuser.time_embedding import TimeEmbedder
+from diffuser.diffuser_blocks import *
 
 class DiffusionUNet(nn.Module):
 

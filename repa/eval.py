@@ -52,14 +52,10 @@ def generate_and_save_images(
                     device=device,
                     dtype=torch.long
                 )
-                student_output = wrapper.student(
-                    latents,
-                    timestep=t_batch,
-                    class_labels=class_labels
-                )
+                student_output = wrapper.forward_student(latents, timesteps=t_batch, class_labels=class_labels)
                 
                 # Safe Chunking during inference
-                output_sample = student_output.sample
+                output_sample = student_output.sample if hasattr(student_output, "sample") else student_output
                 if output_sample.shape[1] == latent_channels * 2:
                     noise_pred, _ = output_sample.chunk(2, dim=1)
                 else:

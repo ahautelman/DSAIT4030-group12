@@ -10,11 +10,12 @@ import cleanfid
 from cleanfid import fid
 import torch
 from tqdm import tqdm
-from dataset import get_celeba_dataloader
-from models import REPAWrapper
-from eval import generate_and_save_images, compute_fid
-from utils import ExperimentLogger
-from train import DiffusionTrainer
+from repa.dataset import get_celeba_dataloader
+from repa.models import REPAWrapper
+from repa.models.factory import build_student_model
+from repa.eval import generate_and_save_images, compute_fid
+from repa.utils import ExperimentLogger
+from repa.train import DiffusionTrainer
 
 
 def find_max_batch_size(trainer, starting_batch=256):
@@ -58,38 +59,39 @@ def get_infinite_dataloader(dataloader):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default=".././data")
+    parser.add_argument("--data_dir", type=str, default="./data")
     parser.add_argument("--dataset_name", type=str, default="celeba")
     parser.add_argument("--output_dir", type=str, default="./output")
     parser.add_argument("--max_steps", type=int, default=30_000)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--model_type", type=str, choices=["sit", "unet"], default="sit")
     parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa", "dog"], default="dog",
                         help="Structural alignment methodology variant to implement")
-    parser.add_argument("--lambda_repa", type=float, default=0.5,
-                        help="Weighting factor for the alignment loss component. Recommended: use 0.2 for REPA, 0.5 for iREPA / DoG.")
+    parser.add_argument("--lambda_repa", type=float, default=1.0,
+                        help="Weighting factor for the alignment loss component. Recommended: use 0.4 for REPA, 1.0 for iREPA / DoG.")
     parser.add_argument("--num_evals", type=int, default=40,
                         help="Target number of evaluations during training")
     parser.add_argument("--num_eval_images", type=int, default=2_000)
     args = parser.parse_args()
 
+    if args.max_steps <= 1:
+        args.num_evals = 1
+        args.num_eval_images = min(args.num_eval_images, args.batch_size or 1)
+
     os.makedirs(args.output_dir, exist_ok=True)
 
-    log_file = os.path.join(args.output_dir, f"experiment_log_{args.mode}.json")
+    log_file = os.path.join(args.output_dir, f"experiment_log_{args.model_type}_{args.mode}.json")
     logger = ExperimentLogger(log_file)
 
     # 1. Initialize Wrapper Configuration
-    wrapper = REPAWrapper(mode=args.mode)
+    student_model, meta = build_student_model(args.model_type)
+    wrapper = REPAWrapper(student_model=student_model, meta=meta, model_type=args.model_type, mode=args.mode)
 
-    # 2. Model Compilation
-    if torch.__version__ >= "2.0.0" and torch.cuda.is_available():
-        print("Compiling Student Architecture via torch.compile...")
-        wrapper.student = torch.compile(wrapper.student)
-
-    # 3. Init Trainer Execution Instance
+    # 2. Init Trainer Execution Instance
     trainer = DiffusionTrainer(wrapper, args.lr, args.lambda_repa)
 
-    # 4. Auto-Batch Optimization
+    # 3. Auto-Batch Optimization
     optimal_batch_size = args.batch_size if args.batch_size else find_max_batch_size(trainer, starting_batch=64)
 
     # Calculate step interval to hit the target number of evaluations
@@ -111,7 +113,7 @@ def main():
     running_losses = {"loss_diff": 0.0, "loss_repa": 0.0, "loss_total": 0.0}
 
     trainer.wrapper.train()
-    progress_bar = tqdm(total=args.max_steps, desc=f"Training [{args.mode.upper()}]")
+    progress_bar = tqdm(total=args.max_steps, desc=f"Training [{args.model_type.upper()}::{args.mode.upper()}]")
 
     # Metrics for empirical tracking
     step_times = []
@@ -169,16 +171,17 @@ def main():
                 "step": global_step,
                 "student_state": trainer.wrapper.student.state_dict(),
                 "fid": current_fid,
-                "mode": args.mode
+                "mode": args.mode,
+                "model_type": args.model_type,
             }
             if args.mode in ["repa", "irepa", "dog"]:
                 checkpoint_dict["proj_head_state"] = trainer.wrapper.proj_head.state_dict()
 
-            torch.save(checkpoint_dict, os.path.join(args.output_dir, f"checkpoint_last_{args.mode}.pt"))
+            torch.save(checkpoint_dict, os.path.join(args.output_dir, f"checkpoint_last_{args.model_type}_{args.mode}.pt"))
 
             if current_fid < best_fid:
                 best_fid = current_fid
-                torch.save(checkpoint_dict, os.path.join(args.output_dir, f"checkpoint_best_{args.mode}.pt"))
+                torch.save(checkpoint_dict, os.path.join(args.output_dir, f"checkpoint_best_{args.model_type}_{args.mode}.pt"))
                 print("🌟 Saved new optimal state checkpoint.")
 
             shutil.rmtree(eval_dir)
