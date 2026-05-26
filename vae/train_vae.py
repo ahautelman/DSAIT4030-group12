@@ -46,6 +46,18 @@ AMP_DTYPE            = torch.bfloat16
 USE_COMPILE          = False #True
 USE_CHANNELS_LAST    = True
 
+DEBUG_MODE = True
+DEBUG_NUM_IMAGES = 1024
+
+USE_LPIPS = True
+USE_GAN = True
+USE_REG = True
+
+KL_WEIGHT = 1e-6
+ESM_WEIGHT = 0.01
+if DEBUG_MODE:
+    DISC_START = 5000
+
 def _unwrap(model):
     return getattr(model, "_orig_mod", model)
 
@@ -70,6 +82,15 @@ def save_checkpoint(vae, disc, vae_opt, disc_opt, step):
     print(f"Saved checkpoint at step {step}")
 
 
+def assert_finite(name, value):
+    if isinstance(value, torch.Tensor) and not torch.isfinite(value).all():
+        print(f"\nNaN/Inf detected in {name}")
+        print("min:", torch.nan_to_num(value).min().item())
+        print("max:", torch.nan_to_num(value).max().item())
+        print("mean:", torch.nan_to_num(value).mean().item())
+        raise RuntimeError(f"{name} became NaN or Inf")
+
+
 def train():
     print(f"Device: {DEVICE}")
     print(f"Dataset: {DATASET} | Mode: {MODE}")
@@ -77,6 +98,12 @@ def train():
 
     # data loader configuration adjusted cleanly for Windows (num_workers=0)
     train_set = load_dataset(DATASET, split="train")
+
+    if DEBUG_MODE:
+        from torch.utils.data import Subset
+        train_set = Subset(train_set, range(DEBUG_NUM_IMAGES))
+        print(f"DEBUG MODE: using only {DEBUG_NUM_IMAGES} images")
+
     train_loader = DataLoader(
         train_set,
         batch_size=BATCH_SIZE,
@@ -93,14 +120,6 @@ def train():
     disc.apply(disc.init_weights)
     lpips_model = lpips.LPIPS(net="vgg").eval().to(DEVICE)
 
-    for p in lpips_model.parameters():
-        p.requires_grad_(False)
-
-    if USE_CHANNELS_LAST:
-        vae = vae.to(memory_format=torch.channels_last)
-        disc = disc.to(memory_format=torch.channels_last)
-        lpips_model = lpips_model.to(memory_format=torch.channels_last)
-
     print(f"VAE params:  {sum(p.numel() for p in vae.parameters()):,}")
     print(f"Disc params: {sum(p.numel() for p in disc.parameters()):,}")
 
@@ -108,14 +127,11 @@ def train():
     vae_opt = torch.optim.AdamW(vae.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=(0.5, 0.9))
     disc_opt = torch.optim.AdamW(disc.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=(0.5, 0.9))
 
-    if USE_COMPILE and DEVICE == "cuda":
-        vae = torch.compile(vae)
-        disc = torch.compile(disc)
-
     # mixed precision scaler
-    # scaler = GradScaler(device="cuda")
+    scaler = GradScaler(device="cuda")
 
     step = 0
+    data_start = time.time()
 
     # Clear gradients cleanly to begin accumulation loop
     vae_opt.zero_grad()
@@ -129,17 +145,15 @@ def train():
 
     while step < TRAIN_STEPS:
         for batch_idx, batch in enumerate(train_loader):
-            data_start = time.perf_counter()
+            e2e_start = time.perf_counter()
 
             if step >= TRAIN_STEPS:
                 break
 
             x = batch["images"].to(DEVICE, non_blocking=True)
-            if USE_CHANNELS_LAST:
-                x = x.contiguous(memory_format=torch.channels_last)
 
             pre_step = time.perf_counter()
-            data_timings[step%LOG_EVERY] = pre_step - data_start
+            data_timings[step%LOG_EVERY] = pre_step - e2e_start
 
             with step_timer:
                 # --------------------------------------------------------
@@ -153,63 +167,78 @@ def train():
                     img_target = out["img_target"]
                     recon = out["reconstruction"]
                     reg_loss = out["reg_loss"]
-    
+
                     recon_loss_val = reconstruction_loss(img_target, recon)
-    
-                    # OPTIMIZATION: Isolating LPIPS forward pass graph generation
-                    #with torch.no_grad():
-                    #    percep_loss_val = perceptual_loss(img_target, recon, lpips_model)
-                    percep_loss_val = perceptual_loss(img_target, recon, lpips_model)
-    
-                    per_loss_stamp = time.time()
-    
-                    if step >= DISC_START:
+
+                    if USE_LPIPS:
+                        percep_loss_val = perceptual_loss(img_target, recon, lpips_model)
+                    else:
+                        percep_loss_val = torch.tensor(0.0, device=DEVICE)
+
+                    if USE_REG:
+                        if MODE == "kl":
+                            reg_term = KL_WEIGHT * reg_loss
+                        elif MODE == "esm":
+                            reg_term = ESM_WEIGHT * reg_loss
+                        else:
+                            reg_term = reg_loss
+                    else:
+                        reg_term = torch.tensor(0.0, device=DEVICE)
+
+
+                    if USE_GAN and step >= DISC_START:
                         fake_scores = disc(recon)
                         gen_loss = generator_loss(fake_scores)
-                        adap_w = adaptive_weight(recon_loss_val + percep_loss_val, gen_loss, _unwrap(vae).last_layer)
+                        adap_w = adaptive_weight(recon_loss_val + percep_loss_val, gen_loss, vae.last_layer).detach()
                         gan_term = LAMBDA2 * adap_w * gen_loss
-    
-                    # Scale the step loss down by accumulation ratio
-                    vae_loss = (recon_loss_val + LAMBDA1 * percep_loss_val + gan_term + reg_loss) / ACCUMULATION_STEPS
-    
-                #scaler.scale(vae_loss).backward()
-                vae_loss.backward()
-    
+                    else:
+                        gan_term = torch.tensor(0.0, device=DEVICE)
+
+                    assert_finite("x", x)
+                    assert_finite("recon", recon)
+                    assert_finite("reg_loss_raw", reg_loss)
+                    assert_finite("reg_term", reg_term)
+                    assert_finite("recon_loss", recon_loss_val)
+                    assert_finite("percep_loss", percep_loss_val)
+                    assert_finite("gan_term", gan_term)
+
+                # Scale the step loss down by accumulation ratio
+                vae_loss = (recon_loss_val + LAMBDA1 * percep_loss_val + gan_term + reg_term) / ACCUMULATION_STEPS
+
+                scaler.scale(vae_loss).backward()
+
                 # --------------------------------------------------------
                 # Step 2: Forward & Backward Discriminator
                 # --------------------------------------------------------
                 if step >= DISC_START:
                     disc.train()
                     vae.eval()
-    
+
                     with autocast(device_type="cuda"):
                         real_scores = disc(img_target.detach())
                         fake_scores = disc(recon.detach())
                         disc_loss = discriminator_loss(real_scores, fake_scores) / ACCUMULATION_STEPS
-    
-                    #scaler.scale(disc_loss).backward()
-                    disc_loss.backward()
-    
+
+                    scaler.scale(disc_loss).backward()
+
                 # --------------------------------------------------------
                 # Step 3: Optimizer Step (Only runs every N sub-batches)
                 # --------------------------------------------------------
                 if (batch_idx + 1) % ACCUMULATION_STEPS == 0:
                     # Step VAE weights
-                    #scaler.unscale_(vae_opt)
+                    scaler.unscale_(vae_opt)
                     torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=1.0)
-                    #scaler.step(vae_opt)
-                    vae_opt.step()
-    
+                    scaler.step(vae_opt)
+            
                     # Step Discriminator weights
                     if step >= DISC_START:
-                        #scaler.unscale_(disc_opt)
+                        scaler.unscale_(disc_opt)
                         torch.nn.utils.clip_grad_norm_(disc.parameters(), max_norm=1.0)
-                        #scaler.step(disc_opt)
-                        disc_opt.step()
-    
+                        scaler.step(disc_opt)
+
                     # Single unified scaler synchronization block
-                    #scaler.update()
-    
+                    scaler.update()
+
                     # Reset tracking gradients
                     vae_opt.zero_grad()
                     disc_opt.zero_grad()
