@@ -45,7 +45,7 @@ class PatchGAN(nn.Module):
 
     def forward(self, x):
         return self.model(x)
-    
+
 def hinge_loss(real, fake):
     """
     Hinge Loss for discriminator training.

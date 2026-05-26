@@ -23,7 +23,7 @@ def image_transforms(num_channels=3, img_size=256, random_resize=True, interpola
     transform_list = []
     if num_channels == 3:
         transform_list.append(transforms.Lambda(lambda img: img.convert("RGB")))
-        
+ 
     transform_list.extend([
         resize,
         transforms.RandomHorizontalFlip(p=random_flip_p),
@@ -61,6 +61,7 @@ def load_dataset(dataset_name: str, num_channels=3, img_size=256, random_resize=
     )
 
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print(BASE_DIR)
     if dataset_name == "celeba":
         disk_path = os.path.join(BASE_DIR, "data", "celeba")
         hf_name = "korexyz/celeba-hq-256x256"
@@ -83,12 +84,12 @@ def load_dataset(dataset_name: str, num_channels=3, img_size=256, random_resize=
     hf_dataset.set_transform(HFTransformWrapper(img_transform, return_classes))
     return hf_dataset
 
-    
+ 
 if __name__ == "__main__":
     # Test execution safely protected by the name == main block
     dataset = load_dataset(dataset_name="imagenet", split="train")
     loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4)
-   
+ 
     for batch in loader:
         print("Image batch shape:", batch["images"].shape)
         if "class_conditioning" in batch:

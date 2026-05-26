@@ -15,3 +15,5 @@ wheels/
 
 # Data files
 data/
+/checkpoints
+/reconstructions

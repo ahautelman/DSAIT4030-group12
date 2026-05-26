@@ -111,7 +111,7 @@ class VAEEncoder(nn.Module):
         in_channels=3,
         latent_channels=4,
         double_z=True,
-        channels_per_block=(128, 256, 512, 512),
+        channels_per_block=(64, 128, 256, 256),
         residual_layers_per_block=2,
         num_attention_layers=1,
         dropout_p=0.0,
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         in_channels=3,
         latent_channels=4,
         double_z=True,
-        channels_per_block=(128, 256, 512, 512),
+        channels_per_block=(64, 128, 256, 256),
         residual_layers_per_block=2,
         num_attention_layers=1,
     )
