@@ -79,9 +79,7 @@ def perceptual_loss(real, fake, lpips_model):
     Perceptual loss using a pretrained feature extractor (e.g. VGG).
     Compares high-level features of real and fake images.
     """
-    with torch.no_grad():
-        loss = lpips_model(real, fake)
-    return loss.mean()
+    return lpips_model(real, fake).mean()
 
 def generator_loss(fake):
     """

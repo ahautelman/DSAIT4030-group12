@@ -34,7 +34,7 @@ WEIGHT_DECAY         = 0.005
 LAMBDA1              = 0.5            # LPIPS weight
 LAMBDA2              = 0.5            # GAN weight
 DISC_START           = 50000          # step to start GAN training
-TRAIN_STEPS          = 500000
+TRAIN_STEPS          = 250000
 LOG_EVERY            = 500
 IMG_EVERY            = 1000
 SAVE_EVERY           = 50000
@@ -46,7 +46,7 @@ AMP_DTYPE            = torch.bfloat16
 USE_COMPILE          = False #True
 USE_CHANNELS_LAST    = True
 
-DEBUG_MODE = True
+DEBUG_MODE = False
 DEBUG_NUM_IMAGES = 1024
 
 USE_LPIPS = True
@@ -264,7 +264,7 @@ def train():
             if step % SAVE_EVERY == 0 and step > 0:
                 save_checkpoint(vae, disc, vae_opt, disc_opt, step)
 
-            e2e_timings[step%LOG_EVERY] = time.perf_counter() - data_start
+            e2e_timings[step%LOG_EVERY] = time.perf_counter() - e2e_start
             step += 1
 
 if __name__ == "__main__":
