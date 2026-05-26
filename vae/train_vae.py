@@ -40,6 +40,19 @@ CKPT_DIR             = "checkpoints"
 DEVICE               = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+DEBUG_MODE = True
+DEBUG_NUM_IMAGES = 1024
+
+USE_LPIPS = True
+USE_GAN = True
+USE_REG = True
+
+KL_WEIGHT = 1e-6
+ESM_WEIGHT = 0.01
+if DEBUG_MODE:
+    DISC_START = 5000
+
+
 def save_images(x, recon, step):
     os.makedirs(SAVE_DIR, exist_ok=True)
     x = (x.detach().cpu() * 0.5 + 0.5).clamp(0, 1)
@@ -61,6 +74,15 @@ def save_checkpoint(vae, disc, vae_opt, disc_opt, step):
     print(f"Saved checkpoint at step {step}")
 
 
+def assert_finite(name, value):
+    if isinstance(value, torch.Tensor) and not torch.isfinite(value).all():
+        print(f"\nNaN/Inf detected in {name}")
+        print("min:", torch.nan_to_num(value).min().item())
+        print("max:", torch.nan_to_num(value).max().item())
+        print("mean:", torch.nan_to_num(value).mean().item())
+        raise RuntimeError(f"{name} became NaN or Inf")
+
+
 def train():
     print(f"Device: {DEVICE}")
     print(f"Dataset: {DATASET} | Mode: {MODE}")
@@ -68,6 +90,12 @@ def train():
 
     # data loader configuration adjusted cleanly for Windows (num_workers=0)
     train_set = load_dataset(DATASET, split="train")
+
+    if DEBUG_MODE:
+        from torch.utils.data import Subset
+        train_set = Subset(train_set, range(DEBUG_NUM_IMAGES))
+        print(f"DEBUG MODE: using only {DEBUG_NUM_IMAGES} images")
+
     train_loader = DataLoader(
         train_set,
         batch_size=BATCH_SIZE,
@@ -123,21 +151,50 @@ def train():
                 reg_loss = out["reg_loss"]
 
                 recon_loss_val = reconstruction_loss(img_target, recon)
-                
-                # OPTIMIZATION: Isolating LPIPS forward pass graph generation
-                with torch.no_grad():
-                    percep_loss_val = perceptual_loss(img_target, recon, lpips_model)
 
-                if step >= DISC_START:
+                if USE_LPIPS:
+                    percep_loss_val = perceptual_loss(img_target, recon, lpips_model)
+                else:
+                    percep_loss_val = torch.tensor(0.0, device=DEVICE)
+
+                if USE_REG:
+                    if MODE == "kl":
+                        reg_term = KL_WEIGHT * reg_loss
+                    elif MODE == "esm":
+                        reg_term = ESM_WEIGHT * reg_loss
+                    else:
+                        reg_term = reg_loss
+                else:
+                    reg_term = torch.tensor(0.0, device=DEVICE)
+
+                if USE_GAN and step >= DISC_START:
                     fake_scores = disc(recon)
                     gen_loss = generator_loss(fake_scores)
-                    adap_w = adaptive_weight(recon_loss_val + percep_loss_val, gen_loss, vae.last_layer)
+                    adap_w = adaptive_weight(
+                        recon_loss_val + LAMBDA1 * percep_loss_val,
+                        gen_loss,
+                        vae.last_layer
+                    ).detach()
                     gan_term = LAMBDA2 * adap_w * gen_loss
                 else:
                     gan_term = torch.tensor(0.0, device=DEVICE)
 
-                # Scale the step loss down by accumulation ratio
-                vae_loss = (recon_loss_val + LAMBDA1 * percep_loss_val + gan_term + reg_loss) / ACCUMULATION_STEPS
+                assert_finite("x", x)
+                assert_finite("recon", recon)
+                assert_finite("reg_loss_raw", reg_loss)
+                assert_finite("reg_term", reg_term)
+                assert_finite("recon_loss", recon_loss_val)
+                assert_finite("percep_loss", percep_loss_val)
+                assert_finite("gan_term", gan_term)
+
+                vae_loss = (
+                                   recon_loss_val
+                                   + LAMBDA1 * percep_loss_val
+                                   + gan_term
+                                   + reg_term
+                           ) / ACCUMULATION_STEPS
+
+                assert_finite("vae_loss", vae_loss)
 
             scaler.scale(vae_loss).backward()
             forward_time = time.time() - forward_start
@@ -188,6 +245,9 @@ def train():
                     f"loss: {vae_loss.item() * ACCUMULATION_STEPS:.4f} | "
                     f"recon: {recon_loss_val.item():.4f} | "
                     f"percep: {percep_loss_val.item():.4f} | "
+                    f"reg_raw: {reg_loss.item():.4f} | "
+                    f"reg_used: {reg_term.item():.6f} | "
+                    f"gan: {gan_term.item():.4f} | "
                     f"data: {data_time:.2f}s | "
                     f"fwd: {forward_time:.2f}s"
                 )
