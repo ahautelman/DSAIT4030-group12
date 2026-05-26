@@ -151,3 +151,40 @@ The alignment loss requires preparing the teacher's target representation using 
 4. **Alignment Loss**: Calculate the negative cosine similarity between projected student features and DoG-filtered teacher features, scaled dynamically by timestep:
    - $L_{DoG}(t) = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2} \times (1 - t_\text{norm})$
 5. **Recommended hyperparameter**: $\lambda_0 = 0.5$ (convolutional projection requires stronger gradients)
+
+# U-REPA (U-Net Representation Alignment)
+## Intro
+While original REPA and its variants (iREPA, DoG-REPA) were designed for Diffusion Transformers (DiTs), adapting them to the canonical diffusion U-Net architecture presents unique challenges. U-Nets traditionally show faster baseline convergence than DiTs, but fully tapping into alignment requires overcoming inherent architectural differences between U-Nets and ViT teachers. 
+
+The U-REPA framework (arXiv:2503.18414) tailors representation alignment specifically for U-Nets by addressing three core hurdles:
+1. **Block Functionalities:** Skip connections fundamentally alter where semantic information is stored compared to a DiT.
+2. **Spatial-Dimension Inconsistencies:** U-Net downsampling means intermediate hidden states have much lower spatial resolutions than the ViT teacher's feature maps.
+3. **Feature Space Gaps:** The architectural divide between a convolutional/hybrid U-Net and a Transformer-based teacher hinders the effectiveness of direct token-wise similarity alignment.
+
+## Core Modifications
+### 1. Target Layer Selection: The Middle Stage
+In DiTs, REPA typically aligns early layers ($F_\text{early}$). However, U-REPA analysis reveals that skip connections in U-Nets create a hierarchical redistribution of information by providing shortcuts between the encoder and decoder. Because of these cross-connections, the **middle stage** (the bottleneck) exhibits the highest semantic density. Thus, U-REPA targets the U-Net's middle stage for alignment rather than the early layers.
+
+### 2. Upsampling Projection Head
+Because the middle stage operates at a heavily downsampled resolution (e.g., 1/8th or 1/16th of the original image size), its feature map $h_t$ is spatially smaller than the teacher's extracted features $z_0$. U-REPA modifies the projection strategy to bridge this spatial-dimension gap.
+- **Strategy: "MLP first, then upscale."**
+- The low-resolution U-Net features are first passed through an MLP to align their channel dimensions with the teacher's dimension.
+- The features are subsequently spatially upsampled to match the higher spatial resolution of the teacher ViT tokens.
+
+### 3. Manifold-Space Loss
+Vanilla REPA enforces a strict, absolute token-wise alignment (e.g., negative cosine similarity on identical patches). Because the feature space gap between a U-Net's bottleneck and a ViT's penultimate layer is so massive, strict token-wise matching is difficult to optimize. 
+To counter this, U-REPA introduces a **Manifold Loss** as an auxiliary objective. Instead of merely pulling individual tokens to match their counterparts, this loss regularizes the *relative similarity* between samples in the batch. It ensures that the underlying geometric structure (the pairwise distances or manifold) of the student features mimics the manifold structure of the teacher features.
+
+## The Math & Data Flow
+The overall objective continues to balance the generative task with alignment, but the alignment workflow is structurally updated for the U-Net.
+
+1. **Teacher Pass**: Extract features $z_0 = E_\phi(x_0)$ from the frozen ViT teacher.
+2. **Student Bottleneck Pass**: Run the noisy image $x_t$ through the U-Net up to the middle stage to acquire downsampled hidden states $h_t$.
+3. **Projection & Upsampling**: Map $h_t$ to the teacher's dimension using the projection head $P_\psi$ (MLP), followed by an upsampling operator $U$:
+   - $\hat{z} = U(P_\psi(h_t))$
+4. **Alignment (Manifold Loss)**: Calculate the alignment loss $L_\text{U-REPA}$. Rather than purely token-wise error, apply manifold regularization that computes the relative similarities among the batch representations, minimizing the divergence between the student manifold and the teacher manifold.
+5. **Total Objective**:
+   - $L_\text{total} = L_\text{diff} + \lambda(t) L_\text{U-REPA}$
+
+## Results & Performance
+U-REPA effectively bridges the U-Net-ViT gap, yielding massive efficiency gains over standard DiT and U-Net baselines. By fully utilizing the U-Net's innate downsampling and skip-connection advantages alongside targeted semantic alignment, U-REPA reaches an FID of $< 1.5$ on ImageNet 256x256 in just 200 epochs (1M iterations)—requiring only **half the total training budget** to outperform standard REPA.

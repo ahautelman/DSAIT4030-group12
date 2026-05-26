@@ -24,7 +24,7 @@ def generate_and_save_images(
         algorithm_type="dpmsolver++"
     )
 
-    latent_channels = wrapper.vae.config.latent_channels
+    latent_channels = wrapper.vae.latent_channels
     latent_h, latent_w = 32, 32
     num_batches = (num_images + batch_size - 1) // batch_size
     image_counter = 0
@@ -52,14 +52,10 @@ def generate_and_save_images(
                     device=device,
                     dtype=torch.long
                 )
-                student_output = wrapper.student(
-                    latents,
-                    timestep=t_batch,
-                    class_labels=class_labels
-                )
+                student_output = wrapper.forward_student(latents, timesteps=t_batch, class_labels=class_labels)
                 
                 # Safe Chunking during inference
-                output_sample = student_output.sample
+                output_sample = student_output.sample if hasattr(student_output, "sample") else student_output
                 if output_sample.shape[1] == latent_channels * 2:
                     noise_pred, _ = output_sample.chunk(2, dim=1)
                 else:
@@ -67,7 +63,7 @@ def generate_and_save_images(
 
                 latents = scheduler.step(noise_pred, t, latents).prev_sample
 
-        latents = latents / wrapper.vae.config.scaling_factor
+        latents = latents / wrapper.vae.scaling_factor
         latents = latents.to(compute_dtype)
         images = wrapper.vae.decode(latents).sample
         images = (images.to(torch.float32) / 2 + 0.5).clamp(0, 1)
