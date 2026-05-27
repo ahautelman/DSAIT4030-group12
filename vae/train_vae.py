@@ -263,9 +263,9 @@ def train():
                     f"reg: {reg_term.item():.4f} | " \
                     f"e2e: {e2e_timings.mean():.2f}ms | " \
                     f"fwd: {fwd_timer.mean():.2f}ms | " \
-                    f"step: {step_timer.mean():.2f}ms"
+                    f"step: {step_timer.mean():.2f}ms\n"
  
-                print( log_text )
+                print( log_text, end="" )
                 with open(LOG_FILE, 'a') as f:
                     f.write(log_text)
 
