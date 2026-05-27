@@ -222,7 +222,6 @@ def esm_loss(x, z, n_bins=16, delta=1.0, remove_dc=True, eps=1e-8):
 
     return torch.sum(sx * (torch.log(sx + eps) - torch.log(sz + eps)), dim=-1).mean()
 
-"""
     # probably wont be used and will be handled in train vae instead, but here for completeness
 def dsm_loss(x_M, x_hat_M, discriminator, lpips_model, lambda1=0.5, lambda2=0.5):
     
@@ -231,4 +230,3 @@ def dsm_loss(x_M, x_hat_M, discriminator, lpips_model, lambda1=0.5, lambda2=0.5)
     gen = generator_loss(discriminator(x_hat_M))
 
     return recon + lambda1 * percep + lambda2 * gen
-"""

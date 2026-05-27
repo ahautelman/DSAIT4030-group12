@@ -36,6 +36,7 @@ LAMBDA2              = 0.5            # GAN weight
 DISC_START           = 50000          # step to start GAN training
 TRAIN_STEPS          = 250000
 LOG_EVERY            = 500
+LOG_FILE             = "experiment.log"
 IMG_EVERY            = 1000
 SAVE_EVERY           = 50000
 SAVE_DIR             = "reconstructions"
@@ -95,6 +96,10 @@ def train():
     print(f"Device: {DEVICE}")
     print(f"Dataset: {DATASET} | Mode: {MODE}")
     print(f"Physical Batch Size: {BATCH_SIZE} | Effective Batch Size: {EFFECTIVE_BATCH_SIZE}")
+
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'w') as f:
+                f.write("")
 
     # data loader configuration adjusted cleanly for Windows (num_workers=0)
     train_set = load_dataset(DATASET, split="train")
@@ -248,23 +253,30 @@ def train():
             # --------------------------------------------------------
             if step % LOG_EVERY == 0:
                 # OPTIMIZATION: .item() handles CPU-GPU sync only when printing
-                print(
-                    f"step {step} | "
-                    f"loss: {vae_loss.item() * ACCUMULATION_STEPS:.4f} | "
-                    f"recon: {recon_loss_val.item():.4f} | "
-                    f"percep: {percep_loss_val.item():.4f} | "
-                    f"e2e: {e2e_timings.mean():.2f}s | "
-                    f"fwd: {fwd_timer.mean():6.2f}ms | "
-                    f"step: {step_timer.mean():6.2f}ms"
-                )
 
+                log_text = \
+                    f"step {step} | " \
+                    f"total: {vae_loss.item() * ACCUMULATION_STEPS:.4f} | " \
+                    f"recon: {recon_loss_val.item():.4f} | " \
+                    f"percep: {percep_loss_val.item():.4f} | " \
+                    f"gan: {gan_term.item():.4f} | " \
+                    f"reg: {reg_term.item():.4f} | " \
+                    f"e2e: {e2e_timings.mean():.2f}ms | " \
+                    f"fwd: {fwd_timer.mean():.2f}ms | " \
+                    f"step: {step_timer.mean():.2f}ms"
+ 
+                print( log_text )
+                with open(LOG_FILE, 'a') as f:
+                    f.write(log_text)
+
+                vae_loss = (recon_loss_val + LAMBDA1 * percep_loss_val + gan_term + reg_term) / ACCUMULATION_STEPS
             if step % IMG_EVERY == 0:
                 save_images(x, recon, step)
 
             if step % SAVE_EVERY == 0 and step > 0:
                 save_checkpoint(vae, disc, vae_opt, disc_opt, step)
 
-            e2e_timings[step%LOG_EVERY] = time.perf_counter() - e2e_start
+            e2e_timings[step%LOG_EVERY] = 1000*(time.perf_counter() - e2e_start)
             step += 1
 
 if __name__ == "__main__":
