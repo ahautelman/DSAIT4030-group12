@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import datetime
 import numpy as np
 import torch
 import lpips
@@ -36,15 +37,11 @@ LAMBDA2              = 0.5            # GAN weight
 DISC_START           = 50000          # step to start GAN training
 TRAIN_STEPS          = 250000
 LOG_EVERY            = 500
-LOG_FILE             = "experiment.log"
 IMG_EVERY            = 1000
 SAVE_EVERY           = 50000
-SAVE_DIR             = "reconstructions"
-CKPT_DIR             = "checkpoints"
-DEVICE               = "cuda" if torch.cuda.is_available() else "cpu"
 
 AMP_DTYPE            = torch.bfloat16
-USE_COMPILE          = False #True
+USE_COMPILE          = False
 USE_CHANNELS_LAST    = True
 
 DEBUG_MODE = False
@@ -56,14 +53,25 @@ USE_REG = True
 
 KL_WEIGHT = 1e-6
 ESM_WEIGHT = 0.01
+
 if DEBUG_MODE:
     DISC_START = 5000
+
+# run-specific output dirs
+RUN_NAME = f"{DATASET}_{MODE}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+RUN_DIR  = f"runs/{RUN_NAME}"
+LOG_FILE = f"{RUN_DIR}/losses.log"
+SAVE_DIR = f"{RUN_DIR}/reconstructions"
+CKPT_DIR = f"{RUN_DIR}/checkpoints"
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def _unwrap(model):
     return getattr(model, "_orig_mod", model)
 
+
 def save_images(x, recon, step):
-    os.makedirs(SAVE_DIR, exist_ok=True)
     x = (x.detach().cpu() * 0.5 + 0.5).clamp(0, 1)
     recon = (recon.detach().cpu() * 0.5 + 0.5).clamp(0, 1)
     for i in range(min(4, x.size(0))):
@@ -72,7 +80,6 @@ def save_images(x, recon, step):
 
 
 def save_checkpoint(vae, disc, vae_opt, disc_opt, step):
-    os.makedirs(CKPT_DIR, exist_ok=True)
     torch.save({
         "step": step,
         "vae": vae.state_dict(),
@@ -97,11 +104,25 @@ def train():
     print(f"Dataset: {DATASET} | Mode: {MODE}")
     print(f"Physical Batch Size: {BATCH_SIZE} | Effective Batch Size: {EFFECTIVE_BATCH_SIZE}")
 
-    if not os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'w') as f:
-                f.write("")
+    os.makedirs(RUN_DIR, exist_ok=True)
+    os.makedirs(SAVE_DIR, exist_ok=True)
+    os.makedirs(CKPT_DIR, exist_ok=True)
 
-    # data loader configuration adjusted cleanly for Windows (num_workers=0)
+    with open(f"{RUN_DIR}/config.txt", 'w') as f:
+        f.write(f"Dataset: {DATASET}\n")
+        f.write(f"Mode: {MODE}\n")
+        f.write(f"Batch size: {BATCH_SIZE} (effective: {EFFECTIVE_BATCH_SIZE})\n")
+        f.write(f"LR: {LR}\n")
+        f.write(f"LAMBDA1: {LAMBDA1}\n")
+        f.write(f"LAMBDA2: {LAMBDA2}\n")
+        f.write(f"DISC_START: {DISC_START}\n")
+        f.write(f"KL_WEIGHT: {KL_WEIGHT}\n")
+        f.write(f"ESM_WEIGHT: {ESM_WEIGHT}\n")
+        f.write(f"TRAIN_STEPS: {TRAIN_STEPS}\n")
+
+    with open(LOG_FILE, 'w') as f:
+        f.write("")
+
     train_set = load_dataset(DATASET, split="train")
 
     if DEBUG_MODE:
@@ -128,17 +149,15 @@ def train():
     print(f"VAE params:  {sum(p.numel() for p in vae.parameters()):,}")
     print(f"Disc params: {sum(p.numel() for p in disc.parameters()):,}")
 
-    # optimizers
     vae_opt = torch.optim.AdamW(vae.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=(0.5, 0.9))
     disc_opt = torch.optim.AdamW(disc.parameters(), lr=LR, weight_decay=WEIGHT_DECAY, betas=(0.5, 0.9))
-
-    # mixed precision scaler
+    
     scaler = GradScaler(device="cuda")
 
     step = 0
     data_start = time.time()
 
-    # Clear gradients cleanly to begin accumulation loop
+  
     vae_opt.zero_grad()
     disc_opt.zero_grad()
 
@@ -161,9 +180,9 @@ def train():
             data_timings[step%LOG_EVERY] = pre_step - e2e_start
 
             with step_timer:
-                # --------------------------------------------------------
+            
                 # Step 1: Forward & Backward VAE (Generator)
-                # --------------------------------------------------------
+                
                 vae.train()
                 disc.eval()
 
@@ -190,7 +209,6 @@ def train():
                     else:
                         reg_term = torch.tensor(0.0, device=DEVICE)
 
-
                     if USE_GAN and step >= DISC_START:
                         fake_scores = disc(recon)
                         gen_loss = generator_loss(fake_scores)
@@ -212,9 +230,9 @@ def train():
 
                 scaler.scale(vae_loss).backward()
 
-                # --------------------------------------------------------
+                
                 # Step 2: Forward & Backward Discriminator
-                # --------------------------------------------------------
+                
                 if step >= DISC_START:
                     disc.train()
                     vae.eval()
@@ -226,15 +244,15 @@ def train():
 
                     scaler.scale(disc_loss).backward()
 
-                # --------------------------------------------------------
+               
                 # Step 3: Optimizer Step (Only runs every N sub-batches)
-                # --------------------------------------------------------
+                
                 if (batch_idx + 1) % ACCUMULATION_STEPS == 0:
                     # Step VAE weights
                     scaler.unscale_(vae_opt)
                     torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=1.0)
                     scaler.step(vae_opt)
-            
+
                     # Step Discriminator weights
                     if step >= DISC_START:
                         scaler.unscale_(disc_opt)
@@ -248,12 +266,10 @@ def train():
                     vae_opt.zero_grad()
                     disc_opt.zero_grad()
 
-            # --------------------------------------------------------
+            
             # Logging & Visual Checks
-            # --------------------------------------------------------
+        
             if step % LOG_EVERY == 0:
-                # OPTIMIZATION: .item() handles CPU-GPU sync only when printing
-
                 log_text = \
                     f"step {step} | " \
                     f"total: {vae_loss.item() * ACCUMULATION_STEPS:.4f} | " \
@@ -264,12 +280,13 @@ def train():
                     f"e2e: {e2e_timings.mean():.2f}ms | " \
                     f"fwd: {fwd_timer.mean():.2f}ms | " \
                     f"step: {step_timer.mean():.2f}ms\n"
- 
-                print( log_text, end="" )
+
+                print(log_text, end="")
                 with open(LOG_FILE, 'a') as f:
                     f.write(log_text)
 
                 vae_loss = (recon_loss_val + LAMBDA1 * percep_loss_val + gan_term + reg_term) / ACCUMULATION_STEPS
+
             if step % IMG_EVERY == 0:
                 save_images(x, recon, step)
 
@@ -278,6 +295,7 @@ def train():
 
             e2e_timings[step%LOG_EVERY] = 1000*(time.perf_counter() - e2e_start)
             step += 1
+
 
 if __name__ == "__main__":
     train()
