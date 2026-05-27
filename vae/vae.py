@@ -170,6 +170,7 @@ class VAE(nn.Module):
         # encode
         moments = self.encoder(x)
         mu, logvar = torch.chunk(moments, 2, dim=1)
+        logvar = torch.clamp(logvar, -30.0, 20.0)
         z = self.reparameterize(mu, logvar)
 
         output = {"mu": mu, "logvar": logvar, "z": z}

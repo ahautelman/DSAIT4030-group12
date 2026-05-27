@@ -109,7 +109,7 @@ def adaptive_weight(perceptual_loss, generator_loss, last_layer):
     generator_grad = torch.autograd.grad(generator_loss, last_layer, retain_graph=True)[0].norm()
 
     weight = perceptual_grad / (generator_grad + 1e-4)
-    weight = torch.clamp(weight, 0.0, 1e4).detach()
+    weight = torch.clamp(weight, 0.0, 100.0).detach()
 
     return weight
 
@@ -222,16 +222,13 @@ def esm_loss(x, z, n_bins=16, delta=1.0, remove_dc=True, eps=1e-8):
 
     return torch.sum(sx * (torch.log(sx + eps) - torch.log(sz + eps)), dim=-1).mean()
 
+"""
+    # probably wont be used and will be handled in train vae instead, but here for completeness
 def dsm_loss(x_M, x_hat_M, discriminator, lpips_model, lambda1=0.5, lambda2=0.5):
-    """
-    DSM compound loss — same as VAE loss but computed on
-    spectrally masked image and reconstruction.
-
-    L_DSM = L1(x_M, x_hat_M) + λ1*LPIPS(x_M, x_hat_M) + λ2*GAN(x_hat_M)
-
-    """
+    
     recon = reconstruction_loss(x_M, x_hat_M)
     percep = perceptual_loss(x_M, x_hat_M, lpips_model)
     gen = generator_loss(discriminator(x_hat_M))
 
     return recon + lambda1 * percep + lambda2 * gen
+"""
