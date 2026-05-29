@@ -3,7 +3,7 @@ from typing import Literal, Tuple
 from diffusers import Transformer2DModel
 
 from diffuser.unet import DiffusionUNet
-from diffuser.unet_example_config import DiffuserConfig
+from diffuser_example.unet_example_config import DiffuserConfig
 
 ModelType = Literal["sit", "unet"]
 FeatureShapeHint = Literal["tokens", "spatial"]
