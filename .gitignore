@@ -19,3 +19,6 @@ data/
 
 # Model checkpoints
 *.pt
+
+/checkpoints
+/reconstructions

@@ -1,0 +1,23 @@
+# core
+datasets==3.6.0
+huggingface_hub==0.32.2
+numpy==1.23.0
+packaging==21.3
+Pillow==11.2.1
+tqdm==4.67.1
+transformers==4.52.4
+
+# training
+accelerate==1.8.0
+diffusers==0.33.1
+wandb==0.20.1
+
+# losses
+lpips==0.1.4
+torch-dct==0.1.6
+
+# pytorch with CUDA 12.8 (Blackwell GPU support)
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.0+cu128
+torchvision==0.22.0+cu128
+torchaudio==2.7.0+cu128
