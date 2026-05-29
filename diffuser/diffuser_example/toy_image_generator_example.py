@@ -3,7 +3,7 @@ import numpy as np
 import os
 import math
 
-from toy_image_generator import get_toy_image_example_batch
+from diffuser.diffuser_example.toy_image_generator import get_toy_image_example_batch
 
 output_dir = "toy_image_examples"
 os.makedirs(output_dir, exist_ok=True)

@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from vae_encoder import VAEEncoder
-from vae_decoder import VAEDecoder
-from vae_losses import kl_loss, esm_loss, dsm_loss
-from dsm_helpers import apply_dsm_mask
+from .vae_encoder import VAEEncoder
+from .vae_decoder import VAEDecoder
+from .vae_losses import kl_loss, esm_loss, dsm_loss
+from .dsm_helpers import apply_dsm_mask
 
 
 class VAE(nn.Module):

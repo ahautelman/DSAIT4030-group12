@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from vae_layers import ResidualBlock, DownSampleBlock, VAEMidBlock
-from vae_transformer import VAESelfAttention
+from .vae_layers import ResidualBlock, DownSampleBlock, VAEMidBlock
+from .vae_transformer import VAESelfAttention
 
 
 

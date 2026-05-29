@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from vae_transformer import VAESelfAttention
+from .vae_transformer import VAESelfAttention
 
 
 class UpSampleBlock(nn.Module):

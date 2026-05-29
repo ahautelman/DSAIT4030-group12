@@ -11,8 +11,8 @@ from torchvision import transforms
 from torch.amp import autocast, GradScaler
 
 from dataset_loader import load_dataset
-from vae import VAE
-from vae_losses import (
+from .vae import VAE
+from .vae_losses import (
     PatchGAN, reconstruction_loss, perceptual_loss,
     generator_loss, discriminator_loss, adaptive_weight
 )
