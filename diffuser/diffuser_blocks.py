@@ -62,9 +62,7 @@ class DiffuserAttentionBlock(nn.Module):
         k = k.reshape(B, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.reshape(B, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
 
-        dropout_value = self.dropout if self.training else 0.0
-        #attn_out = F.scaled_dot_product_attention( q, k, v, dropout_p=self.dropout if self.training else 0.0)
-        attn_out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=dropout_value, is_causal=False)
+        attn_out = F.scaled_dot_product_attention( q, k, v, dropout_p=self.dropout if self.training else 0.0)
         attn_out = attn_out.transpose(1, 2).reshape(B, seq_len, C)
         attn_out = self.out_proj(attn_out)
         attn_out = attn_out.transpose(1, 2).reshape(B, C, H, W)
