@@ -176,4 +176,4 @@ for i in range(start_iteration, iterations):
         save_checkpoint(i, diffusion_checkpoint_path)
 
     if save_checkpoint_milestone_every and save_checkpoint_milestone_every > 0 and (i % save_checkpoint_milestone_every == 0) and i != start_iteration:
-        save_checkpoint(i, f"{diffusion_checkpoint_path}_{i}")
+        save_checkpoint(i, f"{diffusion_checkpoint_path[0:-3]}_{i}_.pt")
