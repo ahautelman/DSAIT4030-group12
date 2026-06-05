@@ -22,7 +22,7 @@ from gpu_timing import GPUTimer
 torch.set_float32_matmul_precision("high")
 
 DATASET              = "celeba"       # "celeba" or "imagenet"
-MODE                 = "kl"           # "kl", "esm", or "dsm"
+MODE                 = "esm"           # "kl", "esm", or "dsm"
 
 # Gradient Accumulation Hyperparameters
 BATCH_SIZE           = 4             # Physical batch size that fits in 8GB VRAM

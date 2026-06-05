@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch
 import lpips
 import torch_dct as dct
+#import pytorch_wavelets as dwt
 
 class PatchGAN(nn.Module):
     """
@@ -73,7 +74,7 @@ def reconstruction_loss(real, fake, loss_type="l1"):
         return F.l1_loss(fake, real)
     elif loss_type == "l2":
         return F.mse_loss(fake, real)
-    
+
 def perceptual_loss(real, fake, lpips_model):
     """
     Perceptual loss using a pretrained feature extractor (e.g. VGG).
@@ -97,7 +98,7 @@ def discriminator_loss(real, fake, loss_type="hinge"):
         return hinge_loss(real, fake)
     elif loss_type == "vanilla":
         return vanilla_loss(real, fake)
-    
+
 
 def adaptive_weight(perceptual_loss, generator_loss, last_layer):
     """
@@ -109,7 +110,7 @@ def adaptive_weight(perceptual_loss, generator_loss, last_layer):
     generator_grad = torch.autograd.grad(generator_loss, last_layer, retain_graph=True)[0].norm()
 
     weight = perceptual_grad / (generator_grad + 1e-4)
-    weight = torch.clamp(weight, 0.0, 100.0).detach()
+    weight = torch.clamp(weight, 0.0, 1.0).detach()
 
     return weight
 
@@ -156,7 +157,7 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8):
     return torch.stack(bins, dim=-1) + eps
 """
 
-def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8):
+def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8, mode="standard", transform="dct"):
     """
     Radially averaged 2D power spectrum using DCT.
     Input:  x -> (B, C, H, W)
@@ -166,10 +167,19 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8):
     device, dtype = x.device, x.dtype
 
     x = x - x.mean(dim=(-2, -1), keepdim=True)
-    
-    # DCT instead of FFT
-    x_dct = dct.dct_2d(x, norm="ortho")  # (B, C, H, W) real valued
-    power = (x_dct ** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
+
+    if transform == "dct":
+        x_tf = dct.dct_2d(x, norm="ortho")  # (B, C, H, W) real valued
+    elif transform == "wavelet":
+        x_tf = dwt.DWTForward(J=3, biort='near_sym_b', qshift='qshift_b').cuda()
+
+    if mode=="standard":
+        # DCT instead of FFT
+        power = (x_tf ** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
+
+    elif mode=="inverse":
+        x_tf_max = x_tf.max(dim=1)
+        power = ( ( x_tf_max - x_dct )** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
 
     fy = torch.arange(H, device=device, dtype=dtype)
     fx = torch.arange(W, device=device, dtype=dtype)
@@ -209,22 +219,28 @@ def flatten_spectrum(spectrum, delta=1.0, eps=1e-8):
     return spectrum * freq.pow(delta).unsqueeze(0) + eps
 
 
-def esm_loss(x, z, n_bins=16, delta=1.0, remove_dc=True, eps=1e-8):
+def esm_loss(x, z, n_bins=16, delta=1.0, remove_dc=True, eps=1e-8, mode="standard", transform="dct"):
     """
     Encoding Spectrum Matching loss:
         L_ESM = KL(flatten(PSD(x)) || PSD(z))
     """
-    sx = radial_power_spectrum(x, n_bins=n_bins, remove_dc=remove_dc, eps=eps)
-    sz = radial_power_spectrum(z, n_bins=n_bins, remove_dc=remove_dc, eps=eps)
+
+    assert mode in ["standard", "inverse"], \
+        f"ESM is only defined as standard or inverse, choose a valid mode to operate it (got: {mode})"
+    assert transform in ["dct", "dwt"], \
+        f"ESM is only usable with Discrete Cosine Transform (dct) and Discrete Wavelet Transform (dwt) transforms please choose either of those (got: {transform})"
+    sx = radial_power_spectrum(x, n_bins=n_bins, remove_dc=remove_dc, eps=eps, mode=mode, transform=transform)
+    sz = radial_power_spectrum(z, n_bins=n_bins, remove_dc=remove_dc, eps=eps, mode=mode, transform=transform)
 
     sx = normalize_spectrum(flatten_spectrum(sx, delta=delta, eps=eps), eps=eps)
     sz = normalize_spectrum(sz, eps=eps)
 
     return torch.sum(sx * (torch.log(sx + eps) - torch.log(sz + eps)), dim=-1).mean()
 
+
     # probably wont be used and will be handled in train vae instead, but here for completeness
 def dsm_loss(x_M, x_hat_M, discriminator, lpips_model, lambda1=0.5, lambda2=0.5):
-    
+ 
     recon = reconstruction_loss(x_M, x_hat_M)
     percep = perceptual_loss(x_M, x_hat_M, lpips_model)
     gen = generator_loss(discriminator(x_hat_M))

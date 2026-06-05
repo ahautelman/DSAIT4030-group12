@@ -17,3 +17,5 @@ wheels/
 data/
 /checkpoints
 /reconstructions
+/runs
+/vae/runs
