@@ -52,7 +52,11 @@ USE_GAN = True
 USE_REG = True
 
 KL_WEIGHT = 1e-6
-ESM_WEIGHT = 0.01
+ESM_WEIGHT = 1#0.01
+
+ESM_TRANSFORM = "dct"
+ESM_MODE = "inverse"
+
 
 if DEBUG_MODE:
     DISC_START = 5000
@@ -141,7 +145,7 @@ def train():
     )
 
     # models
-    vae = VAE(mode=MODE).to(DEVICE)
+    vae = VAE(mode=MODE, esm_mode=ESM_MODE, esm_transform=ESM_TRANSFORM).to(DEVICE)
     disc = PatchGAN().to(DEVICE)
     disc.apply(disc.init_weights)
     lpips_model = lpips.LPIPS(net="vgg").eval().to(DEVICE)

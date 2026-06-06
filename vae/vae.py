@@ -61,6 +61,8 @@ class VAE(nn.Module):
         scale_factor=1.0,
         mode="kl",
         esm_delta=1.0,
+        esm_mode="standard",
+        esm_transform="dct",
         dsm_mask_n=8,
         dsm_block_size=8,
     ):
@@ -73,6 +75,8 @@ class VAE(nn.Module):
         self.scale_factor = scale_factor
         self.mode = mode
         self.esm_delta = esm_delta
+        self.esm_mode = esm_mode
+        self.esm_transform = esm_transform
         self.dsm_mask_n = dsm_mask_n
         self.dsm_block_size = dsm_block_size
 
@@ -187,7 +191,7 @@ class VAE(nn.Module):
             reconstruction = self.decoder(z)
             output["reconstruction"] = reconstruction
             output["img_target"] = x
-            output["reg_loss"] = esm_loss(x, z, delta=self.esm_delta)
+            output["reg_loss"] = esm_loss(x, z, delta=self.esm_delta, mode=self.esm_mode, transform=self.esm_transform)
 
         elif self.mode == "dsm":
             # DSM-AE — apply spectral mask to both x and z
