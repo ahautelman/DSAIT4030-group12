@@ -16,9 +16,14 @@ if platform == "linux" or platform == "linux2":
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
     sys.path.insert(0, os.path.abspath(os.path.join("..")))
-    
+
 from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
+from diffuser.style_loss import VGGGramStyleLoss #ALP-ADDITION
 from diffuser.unet import DiffusionUNet
+
+# ALP-ADDITION: To be used when we add validation
+import csv
+from diffuser.frequency_mse import compute_per_frequency_denoising_mse
 
 from dataset_loader import load_dataset
 
@@ -53,8 +58,8 @@ def load_data(NUM_WORKERS, BATCH_SIZE, DATASET, percentage=1.0):
     )
 
     return train_loader
-
-def train_step(data_iter, batch_size, model, ddpm, fold_factor=1):
+                                                                # ALP-ADDITION: Style loss params for training
+def train_step(data_iter, batch_size, model, ddpm, fold_factor=1, use_style_loss=False, style_loss_fn=None, style_loss_weight=0.0, style_loss_t_max=300):
     
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -80,10 +85,38 @@ def train_step(data_iter, batch_size, model, ddpm, fold_factor=1):
         
         # Let the prediction model predict the added noise given the noisy sample x_t and the diffusion timestep t.
         pred_noise = model(x_t, t)
-        
-        # Compute loss and backprop (normalized by total batch for stability)
-        loss = F.mse_loss(pred_noise, true_noise)
 
+        # ALP-ADDITION: Style loss added
+        # # Compute loss and backprop (normalized by total batch for stability)
+        # loss = F.mse_loss(pred_noise, true_noise)
+        # Standard DDPM noise prediction loss.
+        ddpm_loss = F.mse_loss(pred_noise, true_noise)
+        loss = ddpm_loss
+
+        # Optional Gatys-style Gram matrix loss
+        if use_style_loss and style_loss_fn is not None and style_loss_weight > 0.0:
+            alpha_bar_t = ddpm.alpha_bars[t].to(device).view(-1, 1, 1, 1)
+
+            x0_hat = (
+                x_t - torch.sqrt(1.0 - alpha_bar_t) * pred_noise
+            ) / torch.sqrt(alpha_bar_t)
+
+            if fold_factor > 1:
+                x0_hat_rgb = F.pixel_shuffle(x0_hat, upscale_factor=fold_factor)
+            else:
+                x0_hat_rgb = x0_hat
+
+            # Only apply style loss to lower/no-moderate noise timesteps.
+            # At very high t, x0_hat can be too unstable for VGG style supervision.
+            style_mask = t <= style_loss_t_max
+
+            if style_mask.any():
+                # style_loss_value = style_loss_fn(x0_hat_rgb[style_mask])
+                with torch.amp.autocast(device_type=device, enabled=False):
+                    style_loss_value = style_loss_fn(x0_hat_rgb[style_mask].float())
+                loss = loss + style_loss_weight * style_loss_value
+
+    
         accumulation_steps = batch_size / B
         scaled_loss = loss / accumulation_steps
 
@@ -98,11 +131,15 @@ def train_step(data_iter, batch_size, model, ddpm, fold_factor=1):
     return total_loss / max(data_samples, 1)
 
 #############################################################################
+## ALP-ADDITION
+# NEW NOISES
+noise_mode = "white"      # "white", "hf", or "lf"
+noise_strength = 1.0
+
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/diffusion_ddpm_checkpoint.pt"
 
 iterations = 10000
 batch_size = 256
@@ -113,6 +150,22 @@ save_checkpoint_every = 100
 save_checkpoint_milestone_every = 1000
 print_loss_every = 25
 fold_factor = 2
+
+## ALP-ADDITION:
+#STYLE LOSS CONFIG
+use_style_loss = False
+style_image_path = "style_images/starry_night.jpg"
+style_loss_weight = 0.01 # can be reduced to make it more stable
+style_loss_t_max = 300
+style_image_size = 64
+
+## ALP-ADDITION:
+if use_style_loss:
+    diffusion_checkpoint_path = f"{checkpoint_dir}/diffusion_ddpm_{noise_mode}_strength{noise_strength}_checkpoint_with_styleloss.pt"
+else:
+    diffusion_checkpoint_path = f"{checkpoint_dir}/diffusion_ddpm_{noise_mode}_strength{noise_strength}_checkpoint.pt"
+
+
 #############################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -120,11 +173,23 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch.manual_seed(0)
 np.random.seed(0)
 
-# Create DDPM model with a linear beta schedule
-ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02)
+# Create DDPM model with a linear beta schedule                                                     ## ALP-ADDITION: New params
+ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode=noise_mode, noise_strength=noise_strength)
 ddpm_model.betas = ddpm_model.betas.to(device)
 ddpm_model.alphas = ddpm_model.alphas.to(device)
 ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
+
+
+## ALP-ADDITION:
+style_loss_fn = None
+if use_style_loss:
+    style_loss_fn = VGGGramStyleLoss(
+        style_image_path=style_image_path,
+        device=device,
+        image_size=style_image_size,
+    ).to(device)
+
+    style_loss_fn.eval()
 
 folded_channels = 3 * (fold_factor ** 2)
 
@@ -151,6 +216,7 @@ if os.path.exists(diffusion_checkpoint_path):
     print(f"Loaded checkpoint and starting from iteration {start_iteration}!")
 
 train_loader = load_data(num_workers, minibatch_size, "celeba", percentage=0.35)
+#train_loader = load_data(num_workers, minibatch_size, "celeba", percentage=1.0) ## for the smoke test
 data_i = iter(train_loader)
 
 # Use start_step from checkpoint (if resumed) otherwise 0
@@ -158,12 +224,12 @@ for i in range(start_iteration, iterations):
 
     with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
     
-        try:
-            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor)
+        try:                                                                                    ## ALP-ADDITION: new params
+            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
 
         except:
-            data_i = iter(train_loader)
-            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor)
+            data_i = iter(train_loader)                                                                                     ## ALP-ADDITION: new params
+            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
 
     if i % print_loss_every == 0:
         print(f"step {i:5d} | loss {loss:.4f}")

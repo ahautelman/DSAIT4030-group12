@@ -1,6 +1,29 @@
 from dataclasses import dataclass
 from typing import Tuple
 
+# this was for the smoke test
+"""# toy version:
+@dataclass
+class DiffuserConfig:
+    down_block_types: Tuple = ("Down", "Down")
+    mid_block_types: str = "Mid"
+    up_block_types: Tuple = ("Up", "Up")
+
+    unet_channels_per_block: Tuple = (32, 64)
+    unet_residual_layers_per_block: int = 1
+    unet_up_down_factor: int = 2
+    unet_up_down_kernel_size: int = 3
+
+    time_embed_start_dim: int = 32
+    time_embed_proj_dim: int = 64
+
+    attention_head_dim: int = 8
+
+    groupnorm_groups: int = 8
+    norm_eps: float = 1e-6
+    dropout: float = 0.0
+"""
+
 @dataclass
 class DiffuserConfig:
 

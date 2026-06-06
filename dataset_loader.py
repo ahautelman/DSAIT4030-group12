@@ -80,6 +80,12 @@ def load_dataset(dataset_name: str, num_channels=3, img_size=256, random_resize=
 
     hf_dataset = load_from_disk(disk_path)[split]
 
+    ## ALP-ADDITION: This was for the smoke test, replacing the top part starting with "if not..."
+    # if split == "train":
+    #     hf_dataset = hf_load_dataset(hf_name, split="train[:512]")
+    # else:
+    #     hf_dataset = hf_load_dataset(hf_name, split="validation[:64]")
+
     # Use the picklable class instance instead of a local function
     hf_dataset.set_transform(HFTransformWrapper(img_transform, return_classes))
     return hf_dataset

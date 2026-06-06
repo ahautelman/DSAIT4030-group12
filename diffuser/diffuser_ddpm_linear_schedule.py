@@ -1,4 +1,5 @@
 import torch
+from diffuser.frequency_weighted_noise import frequency_weighted_gaussian_noise
 
 class Diffuser_DDPM_linear_schedule:
 
@@ -7,8 +8,12 @@ class Diffuser_DDPM_linear_schedule:
     The structure of the module is inspired by the "Spectrum Matching: a Unified Perspective for Superior Diffusability in Latent Diffusion" implementation (/modules/scheduler.py on https://github.com/forever208/SpectrumMatching).
     DDPM formulations of the forward and reverse diffusion processes are based on the original DDPM paper (https://arxiv.org/abs/2006.11239).
     """
+                                                                                # ALP-ADDITION: 2 more params
+    def __init__(self, total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode="white", noise_strength=1.0):
 
-    def __init__(self, total_timesteps=1000, beta_start=0.0001, beta_end=0.02):
+        # ALP-ADDITION: for trying out different noises
+        self.noise_mode = noise_mode
+        self.noise_strength = noise_strength
 
         # Number of diffusion steps T
         self.total_timesteps = total_timesteps
@@ -60,7 +65,13 @@ class Diffuser_DDPM_linear_schedule:
         x_0_term = torch.mul(torch.sqrt(alpha_bars_ts), x_0s)
 
         # Sample random noise.
-        epsilon = torch.randn_like(x_0s)
+        #epsilon = torch.randn_like(x_0s)
+        # ALP-ADDITION: For the new noises
+        epsilon = frequency_weighted_gaussian_noise(
+            x_0s,
+            mode=self.noise_mode,
+            strength=self.noise_strength,
+        )
 
         # Compute sqrt(1 - alpha_bar_t) * epsilon.
         epsilon_term = torch.mul(torch.sqrt(torch.sub(1.0, alpha_bars_ts)), epsilon)
@@ -103,7 +114,13 @@ class Diffuser_DDPM_linear_schedule:
         betas_ts = self.betas[ts].to(device).view(-1, 1, 1, 1)
 
         # Sample random noise.
-        z = torch.randn_like(x_ts)
+        #z = torch.randn_like(x_ts)
+        # ALP-ADDITION: For the new noises
+        z = frequency_weighted_gaussian_noise(
+            x_ts,
+            mode=self.noise_mode,
+            strength=self.noise_strength,
+        )
 
         # Compute 1 / sqrt(alpha_t)
         scalar_term = torch.rsqrt(alpha_ts.to(device).view(-1, 1, 1, 1))
