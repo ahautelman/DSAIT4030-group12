@@ -112,8 +112,12 @@ def train_step(data_iter, batch_size, model, ddpm, fold_factor=1, use_style_loss
 
             if style_mask.any():
                 # style_loss_value = style_loss_fn(x0_hat_rgb[style_mask])
-                with torch.amp.autocast(device_type=device, enabled=False):
-                    style_loss_value = style_loss_fn(x0_hat_rgb[style_mask].float())
+
+                x0_hat_rgb_for_style = (x0_hat_rgb.clamp(-1.0, 1.0) + 1.0) / 2.0 # Convert from diffusion training range [-1, 1] to VGG input range [0, 1]
+                with torch.amp.autocast(device_type=device, enabled=False): 
+                    style_loss_value = style_loss_fn(
+                        x0_hat_rgb_for_style[style_mask].float()
+                    )
                 loss = loss + style_loss_weight * style_loss_value
 
     
