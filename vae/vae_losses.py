@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import torch
 import lpips
 import torch_dct as dct
-#import pytorch_wavelets as dwt
+from dwt import DWT
 
 class PatchGAN(nn.Module):
     """
@@ -159,7 +159,7 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8):
 
 def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8, mode="standard", transform="dct"):
     """
-    Radially averaged 2D power spectrum using DCT.
+    Radially averaged 2D power spectrum using DCT or Haar DWT.
     Input:  x -> (B, C, H, W)
     Output: spectrum -> (B, n_bins)
     """
@@ -171,15 +171,15 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8, mode="standard
     if transform == "dct":
         x_tf = dct.dct_2d(x, norm="ortho")  # (B, C, H, W) real valued
     elif transform == "wavelet":
-        x_tf = dwt.DWTForward(J=3, biort='near_sym_b', qshift='qshift_b').cuda()
+        dwt = DWT(x.device)
+        x_tf = dwt.forward(x)
 
     if mode=="standard":
         # DCT instead of FFT
         power = (x_tf ** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
-
     elif mode=="inverse":
-        x_tf_max = x_tf.max(dim=1)
-        power = ( ( x_tf_max - x_dct )** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
+        x_tf_max = x_tf          # Low filtering max - current_value is equivalent to High pass filtering current_value
+        power = ( ( x_tf_max - x_tf )** 2).mean(dim=1)
 
     fy = torch.arange(H, device=device, dtype=dtype)
     fx = torch.arange(W, device=device, dtype=dtype)
