@@ -75,6 +75,9 @@ def create_triangular_mask(block_size=8, n=8, device=None):
     return (u + v) >= thresh  
 
 def apply_dsm_mask(x, z, n, block_size=8):
+    if n==0:
+        return x, z
+    
     B, C, H, W = x.shape
     _, _, h, w = z.shape
 
