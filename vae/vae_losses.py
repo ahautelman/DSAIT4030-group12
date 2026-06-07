@@ -170,8 +170,8 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8, mode="standard
 
     if transform == "dct":
         x_tf = dct.dct_2d(x, norm="ortho")  # (B, C, H, W) real valued
-    elif transform == "wavelet":
-        dwt = DWT(x.device)
+    elif transform == "dwt":
+        dwt = DWT(shape=x.shape, device=x.device)
         x_tf = dwt.forward(x)
 
     if mode=="standard":
