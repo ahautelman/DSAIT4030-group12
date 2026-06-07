@@ -12,8 +12,6 @@ if platform == "linux" or platform == "linux2":
     # We assume that the project folder is located in the home directory
     home_dir = os.path.expanduser("~")
     sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'DSAIT4030-group12')))
-    # Requires you to clone https://github.com/willisma/SiT into your home folder
-    sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'SiT')))
 
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
@@ -24,8 +22,6 @@ from diffuser.unet import DiffusionUNet
 
 from dataset_loader import load_dataset
 from vae.vae import VAE
-
-from models import SiT_models
 
 # Config:
 from diffuser.unet_config import DiffuserConfig
@@ -79,18 +75,12 @@ def train_step(data_iter, batch_size, model, ddpm):
         # Randomly sample diffusion timesteps for each data sample in the minibatch.
         B = data_minibatch.shape[0]
         t = torch.randint(0, ddpm.total_timesteps, (B,), device=device, dtype=torch.long).view(-1)
-        y = torch.full((B,), 1000, device=device, dtype=torch.long)
 
         # Perform a forward diffusion step to time t and retrieve the corresponding noisy sample x_t and the true added noise.
         x_t, true_noise = ddpm.forward_diffusion(data_minibatch, t)
         
         # Let the prediction model predict the added noise given the noisy sample x_t and the diffusion timestep t.
-        model_output = model(x_t, t, y)
-
-        if model_output.shape[1] == true_noise.shape[1] * 2:
-            pred_noise, _ = model_output.chunk(2, dim=1)
-        else:
-            pred_noise = model_output
+        pred_noise = model(x_t, t)
         
         # Compute loss and backprop (normalized by total batch for stability)
         loss = F.mse_loss(pred_noise, true_noise)
@@ -113,15 +103,15 @@ def train_step(data_iter, batch_size, model, ddpm):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_sit_checkpoint.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_checkpoint.pt"
 
-iterations = 20000
+iterations = 10000
 batch_size = 128
-minibatch_size = 16
+minibatch_size = 64
 num_workers = 0
 
 save_checkpoint_every = 100
-save_checkpoint_milestone_every = 5000
+save_checkpoint_milestone_every = 2500
 print_loss_every = 25
 #############################################################################
 
@@ -138,9 +128,10 @@ ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
 
 # Create U-Net model
 config = DiffuserConfig()
-unet = SiT_models['SiT-L/2'](
-    input_size=32, 
-    in_channels=4
+unet = DiffusionUNet(
+    config=config,
+    model_in_channels=4,
+    model_out_channels=4
 ).to(device)
 
 # Instantiate AdamW optimizer

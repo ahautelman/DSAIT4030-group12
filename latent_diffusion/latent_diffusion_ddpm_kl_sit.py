@@ -112,16 +112,16 @@ def train_step(data_iter, batch_size, model, ddpm):
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_sit_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_kl_sit_checkpoint.pt"
 
-iterations = 20000
+iterations = 10000
 batch_size = 128
-minibatch_size = 16
+minibatch_size = 64
 num_workers = 0
 
 save_checkpoint_every = 100
-save_checkpoint_milestone_every = 5000
+save_checkpoint_milestone_every = 2500
 print_loss_every = 25
 #############################################################################
 
@@ -147,7 +147,7 @@ unet = SiT_models['SiT-L/2'](
 optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4, weight_decay=1e-6)
 
 # Create VAE model and load checkpoint
-vae = VAE(mode="esm").to(device)
+vae = VAE(mode="kl").to(device)
 checkpoint = torch.load(vae_checkpoint_path, map_location=device, weights_only=False)
 vae.load_state_dict(checkpoint["vae"], strict=False)
 

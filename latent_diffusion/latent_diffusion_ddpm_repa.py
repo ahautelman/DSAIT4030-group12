@@ -16,19 +16,57 @@ if platform == "linux" or platform == "linux2":
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
     sys.path.insert(0, os.path.abspath(os.path.join("..")))
-    
-from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
-from diffuser.unet import DiffusionUNet
 
 from dataset_loader import load_dataset
 
 from repa.config import ExperimentConfig
 from repa.models.wrapper import REPAWrapper
 from repa.train import DiffusionTrainer
+from repa.models.vae import BaseVAEWrapper
 from repa.models.factory import build_student_model
+
+from vae.vae import VAE
 
 # Config:
 from diffuser.unet_config import DiffuserConfig
+
+class MockLatentDist:
+    def __init__(self, tensor):
+        self.tensor = tensor
+    def sample(self):
+        return self.tensor
+
+class MockVAEOutput:
+    def __init__(self, tensor):
+        self.latent_dist = MockLatentDist(tensor)
+
+class CustomVAEWrapper(BaseVAEWrapper):
+    def __init__(self, checkpoint_path: str, device: str, compute_dtype: torch.dtype):
+        super().__init__()
+        
+        self.vae_model = VAE(mode="esm").to(device)
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        self.vae_model.load_state_dict(checkpoint["vae"], strict=False)
+        
+        self.vae_model.to(compute_dtype)
+        self.vae_model.eval()
+        for param in self.vae_model.parameters():
+            param.requires_grad = False
+
+    def encode(self, x: torch.Tensor):
+        raw_latents = self.vae_model.encode(x)
+        return MockVAEOutput(raw_latents)
+
+    def decode(self, z: torch.Tensor):
+        return self.vae_model.decode(z)
+
+    @property
+    def scaling_factor(self) -> float:
+        return 0.18215
+
+    @property
+    def latent_channels(self) -> int:
+        return 4
 
 def save_checkpoint(iteration, checkpoint_path):
     
@@ -58,25 +96,6 @@ def load_data(NUM_WORKERS, BATCH_SIZE, DATASET, percentage=1.0):
     )
 
     return train_loader
-
-class LocalVAEAdapter(torch.nn.Module):
-    def __init__(self, vae):
-        super().__init__()
-        self.vae = vae
-
-    def encode(self, x):
-        return self.vae.encode(x)
-
-    def decode(self, z):
-        return self.vae.decode(z)
-
-    @property
-    def scaling_factor(self):
-        return self.vae.scale_factor
-
-    @property
-    def latent_channels(self):
-        return self.vae.latent_channels
 
 def train_step(data_iter, batch_size, trainer):
 
@@ -115,16 +134,16 @@ def train_step(data_iter, batch_size, trainer):
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
 diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
 
 iterations = 10000
-batch_size = 256
-minibatch_size = 16
+batch_size = 128
+minibatch_size = 32
 num_workers = 0
 
 save_checkpoint_every = 100
-save_checkpoint_milestone_every = 1000
+save_checkpoint_milestone_every = 5000
 print_loss_every = 25
 #############################################################################
 
@@ -132,12 +151,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 torch.manual_seed(0)
 np.random.seed(0)
-
-# Create DDPM model with a linear beta schedule
-ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02)
-ddpm_model.betas = ddpm_model.betas.to(device)
-ddpm_model.alphas = ddpm_model.alphas.to(device)
-ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
 
 # Create U-Net model
 config = DiffuserConfig()
@@ -159,11 +172,19 @@ config = ExperimentConfig(
     mode="dog",
     lambda_repa=1.0,
     num_evals=40,
-    num_eval_images=2000
+    num_eval_images=2000,
+    vae_model_id="none"
 )
 
-student_model, meta = build_student_model(config.model_type)
-wrapper = REPAWrapper(unet, meta, config)
+custom_vae_wrapper = CustomVAEWrapper(
+    checkpoint_path=vae_checkpoint_path, 
+    device=device, 
+    compute_dtype=torch.bfloat16
+)
+
+_, meta = build_student_model(config.model_type)
+
+wrapper = REPAWrapper(unet, meta, config, custom_vae=custom_vae_wrapper)
 wrapper.student.train()
 trainer = DiffusionTrainer(wrapper, learning_rate=1e-4, lambda_repa=1.0)
 
@@ -183,15 +204,13 @@ data_i = iter(train_loader)
 
 # Use start_step from checkpoint (if resumed) otherwise 0
 for i in range(start_iteration, iterations):
-
-    with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
     
-        try:
-            total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
+    try:
+        total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
 
-        except:
-            data_i = iter(train_loader)
-            total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
+    except:
+        data_i = iter(train_loader)
+        total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
 
     if i % print_loss_every == 0:
         print(f"step {i:5d} | loss {total_loss:.4f} | diff {diff_loss:.4f} | repa {repa_loss:.4f}")

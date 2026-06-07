@@ -113,15 +113,15 @@ def train_step(data_iter, batch_size, model, ddpm):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_sit_checkpoint.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sit_checkpoint.pt"
 
-iterations = 20000
+iterations = 10000
 batch_size = 128
-minibatch_size = 16
+minibatch_size = 64
 num_workers = 0
 
 save_checkpoint_every = 100
-save_checkpoint_milestone_every = 5000
+save_checkpoint_milestone_every = 2500
 print_loss_every = 25
 #############################################################################
 
