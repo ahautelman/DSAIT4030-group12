@@ -110,7 +110,7 @@ def adaptive_weight(perceptual_loss, generator_loss, last_layer):
     generator_grad = torch.autograd.grad(generator_loss, last_layer, retain_graph=True)[0].norm()
 
     weight = perceptual_grad / (generator_grad + 1e-4)
-    weight = torch.clamp(weight, 0.0, 1.0).detach()
+    weight = torch.clamp(weight, 0.0, 1e4).detach()
 
     return weight
 

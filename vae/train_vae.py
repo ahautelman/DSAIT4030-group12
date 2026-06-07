@@ -22,7 +22,7 @@ from gpu_timing import GPUTimer
 torch.set_float32_matmul_precision("high")
 
 DATASET              = "celeba"       # "celeba" or "imagenet"
-MODE                 = "esm"           # "kl", "esm", or "dsm"
+MODE                 = "dsm"           # "kl", "esm", or "dsm"
 
 # Gradient Accumulation Hyperparameters
 BATCH_SIZE           = 4             # Physical batch size that fits in 8GB VRAM
@@ -149,6 +149,8 @@ def train():
     disc = PatchGAN().to(DEVICE)
     disc.apply(disc.init_weights)
     lpips_model = lpips.LPIPS(net="vgg").eval().to(DEVICE)
+    for param in lpips_model.parameters():
+        param.requires_grad = False
 
     print(f"VAE params:  {sum(p.numel() for p in vae.parameters()):,}")
     print(f"Disc params: {sum(p.numel() for p in disc.parameters()):,}")
@@ -216,7 +218,8 @@ def train():
                     if USE_GAN and step >= DISC_START:
                         fake_scores = disc(recon)
                         gen_loss = generator_loss(fake_scores)
-                        adap_w = adaptive_weight(recon_loss_val + percep_loss_val, gen_loss, vae.last_layer).detach()
+                        vae_component = recon_loss_val + (LAMBDA1 * percep_loss_val)
+                        adap_w = adaptive_weight(vae_component.float(), gen_loss.float(), vae.last_layer)
                         gan_term = LAMBDA2 * adap_w * gen_loss
                     else:
                         gan_term = torch.tensor(0.0, device=DEVICE)
@@ -254,7 +257,7 @@ def train():
                 if (batch_idx + 1) % ACCUMULATION_STEPS == 0:
                     # Step VAE weights
                     scaler.unscale_(vae_opt)
-                    torch.nn.utils.clip_grad_norm_(vae.parameters(), max_norm=1.0)
+                    torch.nn.utils.clip_grad_norm_(vae.decoder.parameters(), max_norm=1.0)
                     scaler.step(vae_opt)
 
                     # Step Discriminator weights
@@ -269,6 +272,7 @@ def train():
                     # Reset tracking gradients
                     vae_opt.zero_grad()
                     disc_opt.zero_grad()
+                    step += 1
 
             
             # Logging & Visual Checks
@@ -298,7 +302,6 @@ def train():
                 save_checkpoint(vae, disc, vae_opt, disc_opt, step)
 
             e2e_timings[step%LOG_EVERY] = 1000*(time.perf_counter() - e2e_start)
-            step += 1
 
 
 if __name__ == "__main__":

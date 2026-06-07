@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import random
 
 from vae_encoder import VAEEncoder
 from vae_decoder import VAEDecoder
@@ -79,6 +80,7 @@ class VAE(nn.Module):
         self.esm_transform = esm_transform
         self.dsm_mask_n = dsm_mask_n
         self.dsm_block_size = dsm_block_size
+        self.dsm_mask_family = [0, 8, 10, 12]
 
         self.encoder = VAEEncoder(
             in_channels=in_channels,
@@ -196,7 +198,8 @@ class VAE(nn.Module):
         elif self.mode == "dsm":
             # DSM-AE — apply spectral mask to both x and z
             # decode masked latent, reconstruct masked image
-            x_M, z_M = apply_dsm_mask(x, z, n=self.dsm_mask_n, block_size=self.dsm_block_size)
+            n = random.choice(self.dsm_mask_family)
+            x_M, z_M = apply_dsm_mask(x, z, n=n, block_size=self.dsm_block_size)        
             reconstruction = self.decoder(z_M)
             output["reconstruction"] = reconstruction
             output["img_target"] = x_M
