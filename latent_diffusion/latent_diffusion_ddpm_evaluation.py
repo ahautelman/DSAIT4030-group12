@@ -5,8 +5,6 @@ from sys import platform
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, Subset
 
 if platform == "linux" or platform == "linux2":
     # We assume that the project folder is located in the home directory
@@ -15,15 +13,18 @@ if platform == "linux" or platform == "linux2":
 
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
-    sys.path.insert(0, os.path.abspath(os.path.join("..")))
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     
-from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
+from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule
 from diffuser.unet import DiffusionUNet
-
-from dataset_loader import load_dataset
 from vae.vae import VAE
 
-# Config:
+from dataset_loader import load_dataset
+from diffuser.metrics import compute_FID
+from cleanfid import fid
+from diffuser.metrics import store_FID_baseline
+
+# Choose Config
 from diffuser.unet_config import DiffuserConfig
 
 def sample(model, ddpm, shape, fixed_noise=None):
@@ -113,3 +114,63 @@ for i in range(show_images_num):
         samples = vae.decode(latent_samples)
         save_images(samples, f"{checkpoint_dir}/Sample_{i}.png")
 
+#############################################################################
+# FID calculations
+FID_BASELINE_NAME = "celeba256"
+GENERATED_DIR = f"{checkpoint_dir}/generated"
+
+# Use the celeba dataset directory for baseline stats
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
+
+fid_images_num = 1000
+#############################################################################
+
+# Get directory for generated images
+os.makedirs(GENERATED_DIR, exist_ok=True)
+
+for i in range(fid_images_num):
+    with torch.no_grad():
+        latent_samples = sample(unet, ddpm_model, (1, 4, 32, 32))
+        samples = vae.decode(latent_samples)
+        save_images(samples, f"{GENERATED_DIR}/Sample_{i}.png")
+
+# Store baseline for fid calculations if baseline does not already exist
+if not fid.test_stats_exists(FID_BASELINE_NAME, "clean"):
+    print(f"FID baseline '{FID_BASELINE_NAME}' not found. Creating it...")
+
+    # Check if we need to store the evaluation images 
+    if not os.path.exists(BASELINE_DATA_DIR) or len(os.listdir(BASELINE_DATA_DIR)) == 0:
+        print(f"Extracting evaluation images from celebA from Huggingface")
+        os.makedirs(BASELINE_DATA_DIR, exist_ok=True)
+    
+        val_dataset = load_dataset("celeba", split="validation", img_size=256)
+
+        # Extract and Save images
+        for i in range(len(val_dataset)):
+            batch = val_dataset[i]
+            img = (batch["images"])
+            save_images(img.unsqueeze(0), os.path.join(BASELINE_DATA_DIR, f"img_{i:06d}.png"))
+
+            if (i + 1) % 100 == 0:
+                print(f"Progress: extracted {i+1} images")
+
+        print("Done extracting images")
+
+    store_FID_baseline(
+        baseline_stats_name=FID_BASELINE_NAME,
+        image_dir=BASELINE_DATA_DIR,
+        device=device,
+    )
+    print("FID baseline created.")
+else:
+    print(f"Using existing FID baseline '{FID_BASELINE_NAME}'.")
+
+# gFID calculation
+fid = compute_FID(baseline_stats_name="celeba256", 
+                  dir=GENERATED_DIR, 
+                  device=device,
+                  resolution=256
+                  )
+
+print(fid)
