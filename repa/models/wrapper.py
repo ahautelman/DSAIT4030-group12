@@ -74,8 +74,10 @@ class REPAWrapper(nn.Module):
 
     def forward_student(self, x, timesteps, class_labels):
         """Architecture-agnostic forward pass."""
-        if self.model_type == "sit" or self.model_type == "sit_l_2":
+        if self.model_type == "sit":
             return self.student(x, timestep=timesteps, class_labels=class_labels)
+        if self.model_type == "sit_l_2":
+            return self.student(x, timesteps, class_labels)
         return self.student(x, t=timesteps)
 
     def get_teacher_features(self, x_0: torch.Tensor) -> torch.Tensor:

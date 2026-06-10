@@ -136,7 +136,7 @@ def train_step(data_iter, batch_size, trainer):
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
 diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_sit_esm_repa_checkpoint.pt"
 
 iterations = 10000
@@ -153,13 +153,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 torch.manual_seed(0)
 np.random.seed(0)
-
-# Create U-Net model
-config = DiffuserConfig()
-unet = SiT_models['SiT-L/2'](
-    input_size=32, 
-    in_channels=4
-).to(device)
 
 # Config for REPA-DoG
 config = ExperimentConfig(

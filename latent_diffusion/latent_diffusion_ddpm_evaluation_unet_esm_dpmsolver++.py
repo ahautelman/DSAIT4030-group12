@@ -102,10 +102,17 @@ os.makedirs(checkpoint_dir, exist_ok=True)
 
 vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
 diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/Unet_ESM_DoG_colab/latent_diffusion_unet_esm_repa_checkpoint.pt"
-#diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_unet_esm_repa_checkpoint.pt"
 
-show_images_num = 16
-process_images_per_it = 4
+# FID calculations
+FID_BASELINE_NAME = "celeba256"
+GENERATED_DIR = f"{checkpoint_dir}/generated"
+
+# Use the celeba dataset directory for baseline stats
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
+
+fid_images_num = 10000
+process_images_per_it = 25
 #############################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -128,32 +135,6 @@ if os.path.exists(diffusion_checkpoint_path):
     start_iteration = checkpoint["iteration"] + 1
 else:
     sys.exit("Checkpoint not found...")
-it = show_images_num // process_images_per_it
-
-for i in range(it):
-    with torch.no_grad():
-        latent_samples = sample_diffusers(unet, dpm_scheduler, (process_images_per_it, 4, 32, 32), steps=20)
-        
-        latent_samples = latent_samples / 0.18215
-        
-        samples = vae.decode(latent_samples)
-
-        for j in range(process_images_per_it):
-            # Add unsqueeze(0) to keep the batch dimension for your save_images function
-            save_images(samples[j].unsqueeze(0), f"{checkpoint_dir}/Sample_{i*process_images_per_it+j}.png")
-
-#############################################################################
-# FID calculations
-FID_BASELINE_NAME = "celeba256"
-GENERATED_DIR = f"{checkpoint_dir}/generated"
-
-# Use the celeba dataset directory for baseline stats
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
-
-fid_images_num = 10000
-process_images_per_it = 25
-#############################################################################
 
 # Get directory for generated images
 os.makedirs(GENERATED_DIR, exist_ok=True)
