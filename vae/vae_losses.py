@@ -170,16 +170,21 @@ def radial_power_spectrum(x, n_bins=16, remove_dc=True, eps=1e-8, mode="standard
 
     if transform == "dct":
         x_tf = dct.dct_2d(x, norm="ortho")  # (B, C, H, W) real valued
+        if mode=="standard":
+            # DCT instead of FFT
+            power = (x_tf ** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
+        elif mode=="inverse":
+            x_tf_max = x_tf          # Low filtering max - current_value is equivalent to High pass filtering current_value
+            power = ( ( x_tf_max - x_tf )** 2).mean(dim=1)
     elif transform == "dwt":
         dwt = DWT(shape=x.shape, device=x.device)
         x_tf = dwt.forward(x)
+        if mode == "standard":
+            x_tf[:, :, 1:] = 0
+        elif mode == "inverse":
+            x_tf[:, :, 0] = 0
+        return x_tf
 
-    if mode=="standard":
-        # DCT instead of FFT
-        power = (x_tf ** 2).mean(dim=1)     # (B, H, W) — no .real needed, DCT is real
-    elif mode=="inverse":
-        x_tf_max = x_tf          # Low filtering max - current_value is equivalent to High pass filtering current_value
-        power = ( ( x_tf_max - x_tf )** 2).mean(dim=1)
 
     fy = torch.arange(H, device=device, dtype=dtype)
     fx = torch.arange(W, device=device, dtype=dtype)
