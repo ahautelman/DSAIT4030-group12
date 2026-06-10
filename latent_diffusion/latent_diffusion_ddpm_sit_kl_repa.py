@@ -19,6 +19,8 @@ elif platform == "win32":
 
 from dataset_loader import load_dataset
 
+from diffuser.unet import DiffusionUNet
+
 from repa.config import ExperimentConfig
 from repa.models.wrapper import REPAWrapper
 from repa.train import DiffusionTrainer
@@ -44,7 +46,7 @@ class CustomVAEWrapper(BaseVAEWrapper):
     def __init__(self, checkpoint_path: str, device: str, compute_dtype: torch.dtype):
         super().__init__()
         
-        self.vae_model = VAE(mode="esm").to(device)
+        self.vae_model = VAE(mode="kl").to(device)
         checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
         self.vae_model.load_state_dict(checkpoint["vae"], strict=False)
         
@@ -134,12 +136,12 @@ def train_step(data_iter, batch_size, trainer):
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_KL_step_200000.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_kl_sif_repa_checkpoint.pt"
 
 iterations = 10000
 batch_size = 128
-minibatch_size = 32
+minibatch_size = 1
 num_workers = 0
 
 save_checkpoint_every = 100
@@ -152,14 +154,6 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 torch.manual_seed(0)
 np.random.seed(0)
 
-# Create U-Net model
-config = DiffuserConfig()
-unet = DiffusionUNet(
-    config=config,
-    model_in_channels=4,
-    model_out_channels=4
-).to(device)
-
 # Config for REPA-DoG
 config = ExperimentConfig(
     data_dir="../data",
@@ -168,7 +162,7 @@ config = ExperimentConfig(
     max_steps=30000,
     batch_size=batch_size,
     lr=1e-4,
-    model_type="unet",
+    model_type="sit_l_2",
     mode="dog",
     lambda_repa=1.0,
     num_evals=40,
@@ -182,9 +176,9 @@ custom_vae_wrapper = CustomVAEWrapper(
     compute_dtype=torch.bfloat16
 )
 
-_, meta = build_student_model(config.model_type)
+student_model, meta = build_student_model(config.model_type)
 
-wrapper = REPAWrapper(unet, meta, config, custom_vae=custom_vae_wrapper)
+wrapper = REPAWrapper(student_model, meta, config, custom_vae=custom_vae_wrapper)
 wrapper.student.train()
 trainer = DiffusionTrainer(wrapper, learning_rate=1e-4, lambda_repa=1.0)
 

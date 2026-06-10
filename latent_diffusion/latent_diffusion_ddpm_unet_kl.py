@@ -102,12 +102,12 @@ def train_step(data_iter, batch_size, model, ddpm):
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_kl_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_KL_step_200000.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_unet_kl_checkpoint.pt"
 
 iterations = 10000
 batch_size = 128
-minibatch_size = 64
+minibatch_size = 32
 num_workers = 0
 
 save_checkpoint_every = 100
