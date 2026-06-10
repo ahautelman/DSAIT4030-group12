@@ -54,8 +54,8 @@ USE_REG = True
 KL_WEIGHT = 1e-6
 ESM_WEIGHT = 1#0.01
 
-ESM_TRANSFORM = "dct"
-ESM_MODE = "inverse"
+ESM_TRANSFORM = "dwt"
+ESM_MODE = "standard"
 
 
 if DEBUG_MODE:
