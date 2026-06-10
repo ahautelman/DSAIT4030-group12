@@ -106,14 +106,19 @@ def adaptive_weight(perceptual_loss, generator_loss, last_layer):
     their gradients with respect to the last layer of the decoder.
 
     """
-    perceptual_grad = torch.autograd.grad(perceptual_loss, last_layer, retain_graph=True)[0].norm()
-    generator_grad = torch.autograd.grad(generator_loss, last_layer, retain_graph=True)[0].norm()
+    try:
+        perceptual_grad = torch.autograd.grad(perceptual_loss, last_layer, retain_graph=True)[0].norm()
+        generator_grad = torch.autograd.grad(generator_loss, last_layer, retain_graph=True)[0].norm()
 
-    weight = perceptual_grad / (generator_grad + 1e-4)
-    weight = torch.clamp(weight, 0.0, 1e4).detach()
+        weight = perceptual_grad / (generator_grad + 1e-4)
+        weight = torch.clamp(weight, 0.0, 1e4).detach()
+        if torch.isnan(weight) or torch.isinf(weight):
+            return torch.tensor(1.0, device=perceptual_loss.device)
+        return weight
+    except RuntimeError:
+        return torch.tensor(1.0, device=perceptual_loss.device)
 
-    return weight
-
+    
 def kl_loss(mu, logvar):
     """
     KL Divergence loss for VAE regularization.

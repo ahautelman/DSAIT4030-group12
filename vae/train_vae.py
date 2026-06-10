@@ -67,6 +67,7 @@ RUN_DIR  = f"runs/{RUN_NAME}"
 LOG_FILE = f"{RUN_DIR}/losses.log"
 SAVE_DIR = f"{RUN_DIR}/reconstructions"
 CKPT_DIR = f"{RUN_DIR}/checkpoints"
+RESUME_FROM = "runs/your_run_name/checkpoints/step_50000.pt"  # set to None to start fresh
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -161,6 +162,16 @@ def train():
     scaler = GradScaler(device="cuda")
 
     step = 0
+    if RESUME_FROM is not None:
+        print(f"Resuming from {RESUME_FROM}")
+        ckpt = torch.load(RESUME_FROM, map_location=DEVICE)
+        vae.load_state_dict(ckpt["vae"])
+        disc.load_state_dict(ckpt["disc"])
+        vae_opt.load_state_dict(ckpt["vae_opt"])
+        disc_opt.load_state_dict(ckpt["disc_opt"])
+        step = ckpt["step"]
+        print(f"Resumed from step {step}")
+        
     data_start = time.time()
 
   
