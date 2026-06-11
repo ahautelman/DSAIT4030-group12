@@ -86,8 +86,8 @@ def save_images(img_batch, filepath, title=None):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_colab/latent_diffusion_ddpm_sit_checkpoint_10000_.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_KL_step_200000.pt"
+diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_KL_colab/latent_diffusion_ddpm_kl_sit_checkpoint_10000_.pt"
 #diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
 
 # FID calculations
@@ -112,7 +112,7 @@ unet = SiT_models['SiT-L/2'](
 ).to(device)
 unet.eval()
 
-vae = VAE(mode="esm").to(device)
+vae = VAE(mode="kl").to(device)
 checkpoint = torch.load(vae_checkpoint_path, map_location=device, weights_only=False)
 vae.load_state_dict(checkpoint["vae"], strict=False)
 

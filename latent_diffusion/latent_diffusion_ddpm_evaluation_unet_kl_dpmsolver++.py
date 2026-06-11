@@ -13,8 +13,6 @@ if platform == "linux" or platform == "linux2":
     # We assume that the project folder is located in the home directory
     home_dir = os.path.expanduser("~")
     sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'DSAIT4030-group12')))
-    # Requires you to clone https://github.com/willisma/SiT into your home folder
-    sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'SiT')))
 
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
@@ -33,8 +31,6 @@ from vae.vae import VAE
 from diffusers import DPMSolverMultistepScheduler
 
 from diffuser.unet_config import DiffuserConfig
-
-from models import SiT_models
 
 # Initialize the DPM-Solver++ scheduler using your DDPM parameters
 dpm_scheduler = DPMSolverMultistepScheduler(
@@ -61,11 +57,8 @@ def sample_diffusers(model, scheduler, shape, fixed_noise=None, steps=20):
         # Broadcast the timestep to the batch size for your model
         ts = torch.full((shape[0],), t, device=device, dtype=torch.long)
         
-        # Unconditional class label
-        y = torch.full((shape[0],), 1000, device=device, dtype=torch.long)
-        
         # Forward pass through your SiT model
-        model_output = model(x, ts, y)
+        model_output = model(x, ts)
 
         # Handle variance outputs if your model predicts them
         if model_output.shape[1] == shape[1] * 2:
@@ -81,14 +74,34 @@ def sample_diffusers(model, scheduler, shape, fixed_noise=None, steps=20):
 def save_images(img_batch, filepath, title=None):
     save_image(img_batch, filepath, normalize=True, value_range=(-1.0, 1.0))
 
+def save_images(img_batch, filepath, title=None):
+    img_batch = img_batch.detach().cpu()
+    fig, axes = plt.subplots(1, img_batch.shape[0], figsize=(4 * img_batch.shape[0], 4))
+    if img_batch.shape[0] == 1:
+        axes = [axes]
+
+    for i, ax in enumerate(axes):
+        img = img_batch[i]
+        img = (img + 1.0) / 2.0
+        img = (img * 255.0).clamp(0, 255).byte()
+        img = img.permute(1, 2, 0).numpy()
+        ax.imshow(img)
+        ax.axis("off")
+
+    if title:
+        fig.suptitle(title)
+
+    plt.savefig(filepath, bbox_inches='tight')
+    
+    plt.close(fig)
+
 #############################################################################
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_colab/latent_diffusion_ddpm_sit_checkpoint_10000_.pt"
-#diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_KL_step_200000.pt"
+diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/Unet_KL_colab/latent_diffusion_ddpm_kl_unet_checkpoint_10000_.pt"
 
 # FID calculations
 FID_BASELINE_NAME = "celeba256"
@@ -99,20 +112,20 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
 
 fid_images_num = 10000
-process_images_per_it = 40
+process_images_per_it = 25
 #############################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Create U-Net model
 config = DiffuserConfig()
-unet = SiT_models['SiT-L/2'](
-    input_size=32, 
-    in_channels=4
+unet = DiffusionUNet(
+    config=config,
+    model_in_channels=4,
+    model_out_channels=4
 ).to(device)
 unet.eval()
 
-vae = VAE(mode="esm").to(device)
+vae = VAE(mode="kl").to(device)
 checkpoint = torch.load(vae_checkpoint_path, map_location=device, weights_only=False)
 vae.load_state_dict(checkpoint["vae"], strict=False)
 
@@ -120,7 +133,6 @@ if os.path.exists(diffusion_checkpoint_path):
     checkpoint = torch.load(diffusion_checkpoint_path, map_location=device, weights_only=False)
     unet.load_state_dict(checkpoint["unet"]) 
     start_iteration = checkpoint["iteration"] + 1
-    print(start_iteration)
 else:
     sys.exit("Checkpoint not found...")
 

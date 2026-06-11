@@ -137,12 +137,12 @@ def train_step(data_iter, batch_size, trainer):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_sit_esm_repa_checkpoint.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_kl_sif_repa_checkpoint.pt"
 
 iterations = 10000
 batch_size = 128
-minibatch_size = 64
-num_workers = 2
+minibatch_size = 1
+num_workers = 0
 
 save_checkpoint_every = 100
 save_checkpoint_milestone_every = 5000
@@ -180,6 +180,7 @@ student_model, meta = build_student_model(config.model_type)
 
 wrapper = REPAWrapper(student_model, meta, config, custom_vae=custom_vae_wrapper)
 wrapper.student.train()
+trainer = DiffusionTrainer(wrapper, learning_rate=1e-4, lambda_repa=1.0)
 
 start_iteration = 0
 
