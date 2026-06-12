@@ -87,7 +87,7 @@ checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_colab/latent_diffusion_ddpm_sit_checkpoint_10000_.pt"
+diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_iREPA_colab/latent_diffusion_ddpm_esm_sit_irepa_checkpoint_10000_.pt"
 #diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
 
 # FID calculations
@@ -118,7 +118,7 @@ vae.load_state_dict(checkpoint["vae"], strict=False)
 
 if os.path.exists(diffusion_checkpoint_path):
     checkpoint = torch.load(diffusion_checkpoint_path, map_location=device, weights_only=False)
-    unet.load_state_dict(checkpoint["unet"]) 
+    unet.load_state_dict(checkpoint["student"]) 
     start_iteration = checkpoint["iteration"] + 1
     print(start_iteration)
 else:

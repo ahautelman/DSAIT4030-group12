@@ -100,8 +100,8 @@ def save_images(img_batch, filepath, title=None):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-vae_checkpoint_path = f"{checkpoint_dir}/step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/Unet_ESM_DoG_colab/latent_diffusion_unet_esm_repa_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
+diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/Unet_ESM_colab/latent_diffusion_ddpm_unet_esm_checkpoint_10000_.pt"
 
 # FID calculations
 FID_BASELINE_NAME = "celeba256"
@@ -131,7 +131,7 @@ vae.load_state_dict(checkpoint["vae"], strict=False)
 
 if os.path.exists(diffusion_checkpoint_path):
     checkpoint = torch.load(diffusion_checkpoint_path, map_location=device, weights_only=False)
-    unet.load_state_dict(checkpoint["student"]) 
+    unet.load_state_dict(checkpoint["unet"]) 
     start_iteration = checkpoint["iteration"] + 1
 else:
     sys.exit("Checkpoint not found...")

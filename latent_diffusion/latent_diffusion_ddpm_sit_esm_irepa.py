@@ -137,7 +137,7 @@ def train_step(data_iter, batch_size, trainer):
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sif_dog_checkpoint.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sif_irepa_checkpoint.pt"
 
 iterations = 10000
 batch_size = 128
@@ -151,7 +151,6 @@ print_loss_every = 25
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Config for REPA-DoG
 config = ExperimentConfig(
     data_dir="../data",
     dataset_name="celeba",
@@ -160,7 +159,7 @@ config = ExperimentConfig(
     batch_size=batch_size,
     lr=1e-4,
     model_type="sit_l_2",
-    mode="dog",
+    mode="irepa",
     lambda_repa=1.0,
     num_evals=40,
     num_eval_images=2000,
