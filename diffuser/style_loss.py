@@ -57,7 +57,6 @@ class VGGGramStyleLoss(nn.Module):
         )
 
         style_image = self._load_style_image(style_image_path, image_size).to(device)
-        print(style_image)
 
         with torch.no_grad():
             self.style_grams = [

@@ -49,7 +49,7 @@ def compute_per_frequency_denoising_mse(
       reconstruct x0_hat from predicted noise
       compute Fourier-domain radial MSE of x0 - x0_hat
     """
-    model.eval()
+    #model.eval()
 
     x0 = images.to(device)
 

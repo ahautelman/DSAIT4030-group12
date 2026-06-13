@@ -23,6 +23,7 @@ elif platform == "win32":
 from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
 from diffuser.unet import DiffusionUNet
 from diffuser.frequency_mse import compute_per_frequency_denoising_mse
+from diffuser.frequency_weighted_noise import frequency_weighted_gaussian_noise
 
 from dataset_loader import load_dataset
 from diffuser.metrics import compute_FID
@@ -31,51 +32,46 @@ from diffuser.metrics import store_FID_baseline
 
 from vae.vae import VAE
 
-from diffusers import DPMSolverMultistepScheduler
-
 from diffuser.unet_config import DiffuserConfig
 
 from models import SiT_models
 
-# Initialize the DPM-Solver++ scheduler using your DDPM parameters
-dpm_scheduler = DPMSolverMultistepScheduler(
-    num_train_timesteps=1000,
-    beta_start=0.0001,
-    beta_end=0.02,
-    beta_schedule="linear",
-    algorithm_type="dpmsolver++",
-    solver_order=2
-)
-
-def sample_diffusers(model, scheduler, shape, fixed_noise=None, steps=20):
+def sample_ddpm(model, ddpm, shape, noise_mode, noise_strength):
     model.eval()
 
-    x = torch.randn(shape, device=device)
-    if fixed_noise is not None:
-        x = fixed_noise
+    # 1. Start from pure noise
+    dummy_x = torch.zeros(shape, device=device)
+    x = frequency_weighted_gaussian_noise(dummy_x, mode=noise_mode, strength=noise_strength)
 
-    # Tell the scheduler how many steps we want to take (e.g., 20 instead of 1000)
-    scheduler.set_timesteps(steps, device=device)
-
-    # The scheduler pre-calculates the exact timesteps to use
-    for t in scheduler.timesteps:
-        # Broadcast the timestep to the batch size for your model
+    # 2. Iterate backward from T-1 down to 0
+    for t in reversed(range(0, ddpm.total_timesteps)):
         ts = torch.full((shape[0],), t, device=device, dtype=torch.long)
-        
-        # Unconditional class label
         y = torch.full((shape[0],), 1000, device=device, dtype=torch.long)
-        
-        # Forward pass through your SiT model
-        model_output = model(x, ts, y)
 
-        # Handle variance outputs if your model predicts them
+        with torch.no_grad():
+            model_output = model(x, ts, y)
+
         if model_output.shape[1] == shape[1] * 2:
             pred_noise, _ = model_output.chunk(2, dim=1)
         else:
             pred_noise = model_output
-            
-        # Let the scheduler compute the previous image sample x_{t-1}
-        x = scheduler.step(pred_noise, t, x).prev_sample
+
+        # Grab the schedule variables for this timestep
+        alpha_t = ddpm.alphas[ts].view(-1, 1, 1, 1)
+        alpha_bar_t = ddpm.alpha_bars[ts].view(-1, 1, 1, 1)
+        beta_t = ddpm.betas[ts].view(-1, 1, 1, 1)
+
+        # 3. Add noise for Langevin dynamics (except on the final step t=0)
+        # Again, if you need HF noise here, replace torch.randn_like(x)
+        if t > 0:
+            noise = frequency_weighted_gaussian_noise(x, mode=noise_mode, strength=noise_strength)
+        else:
+            noise = torch.zeros_like(x)
+
+        # 4. The standard DDPM reverse step formula
+        x = (1 / torch.sqrt(alpha_t)) * (
+            x - ((1 - alpha_t) / torch.sqrt(1 - alpha_bar_t)) * pred_noise
+        ) + torch.sqrt(beta_t) * noise
 
     return x
 
@@ -100,10 +96,15 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
 
 fid_images_num = 10000
-process_images_per_it = 40
+process_images_per_it = 1
 #############################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode="hf")
+ddpm_model.betas = ddpm_model.betas.to(device)
+ddpm_model.alphas = ddpm_model.alphas.to(device)
+ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
 
 # Create U-Net model
 config = DiffuserConfig()
@@ -133,7 +134,7 @@ it = fid_images_num // process_images_per_it
 for i in range(it):
     print(i)
     with torch.no_grad():
-        latent_samples = sample_diffusers(unet, dpm_scheduler, (process_images_per_it, 4, 32, 32), steps=20)
+        latent_samples = sample_ddpm(unet, ddpm_model, (process_images_per_it, 4, 32, 32), 'hf', 1.0)
         latent_samples = latent_samples / 0.18215
         samples = vae.decode(latent_samples)
 
@@ -181,3 +182,63 @@ fid = compute_FID(baseline_stats_name="celeba256",
 
 print(fid)
 
+# ====================================================================
+# ALP-ADDITION: Frequency MSE Evaluation
+# ====================================================================
+
+print("\n--- Starting Frequency MSE Evaluation ---")
+
+# 2. Create a wrapper to handle SiT's class labels and chunked variance outputs
+def sit_frequency_wrapper(x_t, t):
+    y = torch.full((x_t.shape[0],), 1000, device=device, dtype=torch.long)
+    model_output = unet(x_t, t, y)
+    
+    if model_output.shape[1] == x_t.shape[1] * 2:
+        pred_noise, _ = model_output.chunk(2, dim=1)
+        return pred_noise
+    return model_output
+
+# 3. Load Validation Data via DataLoader
+# Using the existing dataset logic from your file
+val_dataset_eval = load_dataset("celeba", split="validation", img_size=256)
+val_loader = DataLoader(val_dataset_eval, batch_size=32, shuffle=False, num_workers=2)
+
+# Select which timesteps you want to evaluate the spectral error on
+timesteps_to_evaluate = [100, 500, 900]
+frequency_results = {t: [] for t in timesteps_to_evaluate}
+
+# 4. Evaluation Loop
+unet.eval()
+vae.eval()
+
+# To save time, we evaluate the first 5 batches. Increase max_batches for a full validation pass.
+max_batches = 100 
+
+with torch.no_grad():
+    for i, batch in enumerate(val_loader):
+        if i >= max_batches:
+            break
+            
+        real_images = batch["images"].to(device)
+        
+        # CRITICAL: Project images into latent space before calculating metric
+        latents = vae.encode(real_images) * 0.18215
+        
+        for t_val in timesteps_to_evaluate:
+            rad_avg_error = compute_per_frequency_denoising_mse(
+                model=sit_frequency_wrapper,
+                ddpm=ddpm_model,
+                images=latents,
+                t_value=t_val,
+                device=device
+            )
+            frequency_results[t_val].append(rad_avg_error)
+
+# 5. Aggregate and display results
+for t_val in timesteps_to_evaluate:
+    # Stack all batches and compute the mean across them
+    avg_rad_error = torch.stack(frequency_results[t_val]).mean(dim=0)
+    
+    print(f"\nTimestep {t_val} - Mean Radial Spectral Error (first 10 radii):")
+    for radius, err in enumerate(avg_rad_error[:10]):
+        print(f"  Radius {radius}: {err.item():.4f}")

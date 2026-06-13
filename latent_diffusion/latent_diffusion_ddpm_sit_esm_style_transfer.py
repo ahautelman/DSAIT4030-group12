@@ -60,80 +60,74 @@ def load_data(NUM_WORKERS, BATCH_SIZE, DATASET, percentage=1.0):
 
     return train_loader
 
-def train_step(data_iter, batch_size, model, ddpm, use_style_loss=False, style_loss_fn=None, style_loss_weight=0.0, style_loss_t_max=300):
+def train_step(data_iter, batch_size, model, ddpm, vae, style_loss_fn=None, style_loss_weight=0.0, style_loss_t_max=300):
     
     model.train()
     optimizer.zero_grad(set_to_none=True)
 
-    total_loss = 0.0
+    running_total_loss = 0.0
+    total_mse_loss = 0.0
+    total_style_loss = 0.0
     data_samples = 0
 
     while data_samples < batch_size:
 
+        style_loss_float = 0.0 
+        
         batch = next(data_iter)
-
         data_minibatch = batch["images"].to(device, non_blocking=True)
         
         with torch.no_grad():
             data_minibatch = vae.encode(data_minibatch) * 0.18215
 
-        # Randomly sample diffusion timesteps for each data sample in the minibatch.
         B = data_minibatch.shape[0]
         t = torch.randint(0, ddpm.total_timesteps, (B,), device=device, dtype=torch.long).view(-1)
         y = torch.full((B,), 1000, device=device, dtype=torch.long)
 
-        # Perform a forward diffusion step to time t and retrieve the corresponding noisy sample x_t and the true added noise.
-        x_t, true_noise = ddpm.forward_diffusion(data_minibatch, t)
+        z_t, true_noise = ddpm.forward_diffusion(data_minibatch, t)
         
-        # Let the prediction model predict the added noise given the noisy sample x_t and the diffusion timestep t.
-        model_output = model(x_t, t, y)
+        model_output = model(z_t, t, y)
 
         if model_output.shape[1] == true_noise.shape[1] * 2:
             pred_noise, _ = model_output.chunk(2, dim=1)
         else:
             pred_noise = model_output
         
-        # Compute loss and backprop (normalized by total batch for stability)
-        loss = F.mse_loss(pred_noise, true_noise)
+        mse_loss = F.mse_loss(pred_noise, true_noise)
 
-        # Optional Gatys-style Gram matrix loss
-        if use_style_loss and style_loss_fn is not None and style_loss_weight > 0.0:
-            alpha_bar_t = ddpm.alpha_bars[t].to(device).view(-1, 1, 1, 1)
+        alpha_bar_t = ddpm.alpha_bars[t].to(device).view(-1, 1, 1, 1)
+        z0_hat = (z_t - torch.sqrt(1.0 - alpha_bar_t) * pred_noise) / torch.sqrt(alpha_bar_t)
+        
+        style_mask = t <= style_loss_t_max
 
-            x0_hat = (
-                x_t - torch.sqrt(1.0 - alpha_bar_t) * pred_noise
-            ) / torch.sqrt(alpha_bar_t)
-
-            # Only apply style loss to lower/no-moderate noise timesteps.
-            # At very high t, x0_hat can be too unstable for VGG style supervision.
-            style_mask = t <= style_loss_t_max
-
-            if style_mask.any():
+        if style_mask.any():
+            valid_z0 = z0_hat[style_mask]
+            with torch.amp.autocast(device_type=device, enabled=False):
+                latents = valid_z0.float() / 0.18215
+                decoded_images = vae.decode(latents)
+                decoded_images = (decoded_images + 1.0) / 2.0
                 
-                with torch.amp.autocast(device_type=device, enabled=False):
-
-                    valid_latents = x0_hat[style_mask]
-                    
-                    decoded_images = vae.decode(valid_latents / 0.18215)
-                    
-                    decoded_images = (decoded_images + 1.0) / 2.0
-
-                    style_loss_value = style_loss_fn(decoded_images.float())
-                    
-                loss = loss + style_loss_weight * style_loss_value
+                style_loss_tensor = style_loss_fn(decoded_images)
+                style_loss_float = style_loss_tensor.item() # Extract float to prevent memory leak
+                
+            batch_loss = mse_loss + style_loss_weight * style_loss_tensor
+        else:
+            batch_loss = mse_loss
 
         accumulation_steps = batch_size / B
-        scaled_loss = loss / accumulation_steps
-
+        scaled_loss = batch_loss / accumulation_steps
         scaled_loss.backward()
 
-        total_loss += loss.detach().item() * B
+        # 3. Safely accumulate the detached floats
+        running_total_loss += batch_loss.detach().item() * B
+        total_mse_loss += mse_loss.detach().item() * B
+        total_style_loss += style_loss_float * B
         data_samples += B
 
     optimizer.step()
     optimizer.zero_grad(set_to_none=True)
     
-    return total_loss / max(data_samples, 1)
+    return running_total_loss / max(data_samples, 1), total_mse_loss / max(data_samples, 1), total_style_loss / max(data_samples, 1)
 
 #############################################################################
 # Set the path to the VAE checkpoint
@@ -141,9 +135,9 @@ checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
 
-iterations = 10000
-batch_size = 128
-minibatch_size = 4
+iterations = 100001
+batch_size = 64
+minibatch_size = 8
 num_workers = 0
 
 save_checkpoint_every = 100
@@ -151,16 +145,12 @@ save_checkpoint_milestone_every = 2500
 print_loss_every = 25
 
 #STYLE LOSS CONFIG
-use_style_loss = True
 style_image_path = "../style_images/starry_night.jpg"
-style_loss_weight = 0.01 # can be reduced to make it more stable
+style_loss_weight = 1.0
 style_loss_t_max = 300
 style_image_size = 64
 
-if use_style_loss:
-    diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sit_checkpoint_with_styleloss.pt"
-else:
-    diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sit_checkpoint.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_esm_sit_checkpoint_with_styleloss.pt"
 #############################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -169,14 +159,14 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 # Create DDPM model with a linear beta schedule
-ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, )
+ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02)
 ddpm_model.betas = ddpm_model.betas.to(device)
 ddpm_model.alphas = ddpm_model.alphas.to(device)
 ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
 
 # Create U-Net model
 config = DiffuserConfig()
-unet = SiT_models['SiT-L/2'](
+unet = SiT_models['SiT-B/2'](
     input_size=32, 
     in_channels=4
 ).to(device)
@@ -188,20 +178,16 @@ optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4, weight_decay=1e-6)
 vae = VAE(mode="esm").to(device)
 checkpoint = torch.load(vae_checkpoint_path, map_location=device, weights_only=False)
 vae.load_state_dict(checkpoint["vae"], strict=False)
-
 for param in vae.parameters():
     param.requires_grad = False
 vae.eval()
 
-style_loss_fn = None
-if use_style_loss:
-    style_loss_fn = VGGGramStyleLoss(
-        style_image_path=style_image_path,
-        device=device,
-        image_size=style_image_size,
-    ).to(device)
-
-    style_loss_fn.eval()
+style_loss_fn = VGGGramStyleLoss(
+    style_image_path=style_image_path,
+    device=device,
+    image_size=style_image_size,
+).to(device)
+style_loss_fn.eval()
 
 start_iteration = 0
 
@@ -223,14 +209,14 @@ for i in range(start_iteration, iterations):
     with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
     
         try:
-            loss = train_step(data_i, batch_size, unet, ddpm_model, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
+            loss, mse_loss, style_loss = train_step(data_i, batch_size, unet, ddpm_model, vae, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
 
         except:
             data_i = iter(train_loader)
-            loss = train_step(data_i, batch_size, unet, ddpm_model, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
+            loss, mse_loss, style_loss = train_step(data_i, batch_size, unet, ddpm_model, vae, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
 
     if i % print_loss_every == 0:
-        print(f"step {i:5d} | loss {loss:.4f}")
+        print(f"step {i:5d} | loss {loss:.4f} | mse loss {mse_loss:.4f} | style loss {style_loss:.4f}")
 
     # Periodic checkpoint save
     if save_checkpoint_every and save_checkpoint_every > 0 and (i % save_checkpoint_every == 0) and i != start_iteration:
