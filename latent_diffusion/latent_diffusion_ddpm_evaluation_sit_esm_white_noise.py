@@ -62,7 +62,6 @@ def sample_ddpm(model, ddpm, shape, noise_mode, noise_strength):
         beta_t = ddpm.betas[ts].view(-1, 1, 1, 1)
 
         # 3. Add noise for Langevin dynamics (except on the final step t=0)
-        # Again, if you need HF noise here, replace torch.randn_like(x)
         if t > 0:
             noise = frequency_weighted_gaussian_noise(x, mode=noise_mode, strength=noise_strength)
         else:
@@ -84,7 +83,7 @@ checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_hf/latent_diffusion_ddpm_esm_sit_hf_checkpoint_10000_.pt"
+diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_colab/latent_diffusion_ddpm_sit_checkpoint_10000_.pt"
 #diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
 
 # FID calculations
@@ -101,7 +100,7 @@ process_images_per_it = 1
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode="hf")
+ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode="white")
 ddpm_model.betas = ddpm_model.betas.to(device)
 ddpm_model.alphas = ddpm_model.alphas.to(device)
 ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
@@ -134,7 +133,7 @@ it = fid_images_num // process_images_per_it
 for i in range(it):
     print(i)
     with torch.no_grad():
-        latent_samples = sample_ddpm(unet, ddpm_model, (process_images_per_it, 4, 32, 32), 'hf', 1.0)
+        latent_samples = sample_ddpm(unet, ddpm_model, (process_images_per_it, 4, 32, 32), 'white', 1.0)
         latent_samples = latent_samples / 0.18215
         samples = vae.decode(latent_samples)
 

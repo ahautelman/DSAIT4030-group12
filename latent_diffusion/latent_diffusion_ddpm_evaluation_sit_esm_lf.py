@@ -62,7 +62,6 @@ def sample_ddpm(model, ddpm, shape, noise_mode, noise_strength):
         beta_t = ddpm.betas[ts].view(-1, 1, 1, 1)
 
         # 3. Add noise for Langevin dynamics (except on the final step t=0)
-        # Again, if you need lf noise here, replace torch.randn_like(x)
         if t > 0:
             noise = frequency_weighted_gaussian_noise(x, mode=noise_mode, strength=noise_strength)
         else:
@@ -95,7 +94,7 @@ GENERATED_DIR = f"{checkpoint_dir}/generated"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE_DATA_DIR = os.path.join(BASE_DIR, "data", "celeba", "validation")
 
-fid_images_num = 10000
+fid_images_num = 1
 process_images_per_it = 1
 #############################################################################
 
@@ -142,45 +141,45 @@ for i in range(it):
             # Add unsqueeze(0) to keep the batch dimension for your save_images function
             save_images(samples[j].unsqueeze(0), f"{GENERATED_DIR}/Sample_{i*process_images_per_it+j}.png")
 
-# Store baseline for fid calculations if baseline does not already exist
-if not fid.test_stats_exists(FID_BASELINE_NAME, "clean"):
-    print(f"FID baseline '{FID_BASELINE_NAME}' not found. Creating it...")
+# # Store baseline for fid calculations if baseline does not already exist
+# if not fid.test_stats_exists(FID_BASELINE_NAME, "clean"):
+#     print(f"FID baseline '{FID_BASELINE_NAME}' not found. Creating it...")
 
-    # Check if we need to store the evaluation images 
-    if not os.path.exists(BASELINE_DATA_DIR) or len(os.listdir(BASELINE_DATA_DIR)) == 0:
-        print(f"Extracting evaluation images from celebA from Huggingface")
-        os.makedirs(BASELINE_DATA_DIR, exist_ok=True)
+#     # Check if we need to store the evaluation images 
+#     if not os.path.exists(BASELINE_DATA_DIR) or len(os.listdir(BASELINE_DATA_DIR)) == 0:
+#         print(f"Extracting evaluation images from celebA from Huggingface")
+#         os.makedirs(BASELINE_DATA_DIR, exist_ok=True)
     
-        val_dataset = load_dataset("celeba", split="validation", img_size=256)
+#         val_dataset = load_dataset("celeba", split="validation", img_size=256)
 
-        # Extract and Save images
-        for i in range(len(val_dataset)):
-            batch = val_dataset[i]
-            img = (batch["images"])
-            save_images(img.unsqueeze(0), os.path.join(BASELINE_DATA_DIR, f"img_{i:06d}.png"))
+#         # Extract and Save images
+#         for i in range(len(val_dataset)):
+#             batch = val_dataset[i]
+#             img = (batch["images"])
+#             save_images(img.unsqueeze(0), os.path.join(BASELINE_DATA_DIR, f"img_{i:06d}.png"))
 
-            if (i + 1) % 100 == 0:
-                print(f"Progress: extracted {i+1} images")
+#             if (i + 1) % 100 == 0:
+#                 print(f"Progress: extracted {i+1} images")
 
-        print("Done extracting images")
+#         print("Done extracting images")
 
-    store_FID_baseline(
-        baseline_stats_name=FID_BASELINE_NAME,
-        image_dir=BASELINE_DATA_DIR,
-        device=device,
-    )
-    print("FID baseline created.")
-else:
-    print(f"Using existing FID baseline '{FID_BASELINE_NAME}'.")
+#     store_FID_baseline(
+#         baseline_stats_name=FID_BASELINE_NAME,
+#         image_dir=BASELINE_DATA_DIR,
+#         device=device,
+#     )
+#     print("FID baseline created.")
+# else:
+#     print(f"Using existing FID baseline '{FID_BASELINE_NAME}'.")
 
-# gFID calculation
-fid = compute_FID(baseline_stats_name="celeba256", 
-                  dir=GENERATED_DIR, 
-                  device=device,
-                  resolution=256
-                  )
+# # gFID calculation
+# fid = compute_FID(baseline_stats_name="celeba256", 
+#                   dir=GENERATED_DIR, 
+#                   device=device,
+#                   resolution=256
+#                   )
 
-print(fid)
+# print(fid)
 
 # ====================================================================
 # ALP-ADDITION: Frequency MSE Evaluation
@@ -216,8 +215,8 @@ max_batches = 100
 
 with torch.no_grad():
     for i, batch in enumerate(val_loader):
-        if i >= max_batches:
-            break
+        # if i >= max_batches:
+        #     break
             
         real_images = batch["images"].to(device)
         

@@ -88,7 +88,7 @@ checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
-diffusion_checkpoint_path = f"/media/remcohuijsen/Expansion/generative_modeling_checkpoints/SiT_ESM_hf/latent_diffusion_ddpm_esm_sit_hf_checkpoint_10000_.pt"
+diffusion_checkpoint_path = f"/home/remcohuijsen/DSAIT4030-group12/checkpoints/latent_diffusion_ddpm_esm_sit_checkpoint_with_styleloss_60000_.pt"
 #diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
 
 # FID calculations
@@ -107,7 +107,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Create U-Net model
 config = DiffuserConfig()
-unet = SiT_models['SiT-L/2'](
+unet = SiT_models['SiT-B/2'](
     input_size=32, 
     in_channels=4
 ).to(device)
