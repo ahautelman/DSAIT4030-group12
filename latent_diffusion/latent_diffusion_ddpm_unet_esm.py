@@ -21,11 +21,7 @@ from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule
 from diffuser.unet import DiffusionUNet
 
 from dataset_loader import load_dataset
-
-from repa.config import ExperimentConfig
-from repa.models.wrapper import REPAWrapper
-from repa.train import DiffusionTrainer
-from repa.models.factory import build_student_model
+from vae.vae import VAE
 
 # Config:
 from diffuser.unet_config import DiffuserConfig
@@ -34,8 +30,8 @@ def save_checkpoint(iteration, checkpoint_path):
     
     checkpoint = {
         'iteration': iteration,
-        'student': wrapper.student.state_dict(),
-        'optimizer': trainer.optimizer.state_dict(),
+        'unet': unet.state_dict(),
+        'optimizer': optimizer.state_dict(),
     }
     torch.save(checkpoint, checkpoint_path)
 
@@ -59,33 +55,12 @@ def load_data(NUM_WORKERS, BATCH_SIZE, DATASET, percentage=1.0):
 
     return train_loader
 
-class LocalVAEAdapter(torch.nn.Module):
-    def __init__(self, vae):
-        super().__init__()
-        self.vae = vae
-
-    def encode(self, x):
-        return self.vae.encode(x)
-
-    def decode(self, z):
-        return self.vae.decode(z)
-
-    @property
-    def scaling_factor(self):
-        return self.vae.scale_factor
-
-    @property
-    def latent_channels(self):
-        return self.vae.latent_channels
-
-def train_step(data_iter, batch_size, trainer):
-
-    trainer.optimizer.zero_grad(set_to_none=True)
+def train_step(data_iter, batch_size, model, ddpm):
     
-    total_loss = 0.0
-    diff_loss = 0.0
-    repa_loss = 0.0
+    model.train()
+    optimizer.zero_grad(set_to_none=True)
 
+    total_loss = 0.0
     data_samples = 0
 
     while data_samples < batch_size:
@@ -93,38 +68,50 @@ def train_step(data_iter, batch_size, trainer):
         batch = next(data_iter)
 
         data_minibatch = batch["images"].to(device, non_blocking=True)
-
-        B = data_minibatch.shape[0]
-        accumulation_steps = batch_size / B
         
-        losses = trainer.minibatch_backward_step(data_minibatch, accumulation_steps=accumulation_steps)
+        with torch.no_grad():
+            data_minibatch = vae.encode(data_minibatch) * 0.18215
 
-        total_loss += losses['loss_total'] * B
-        diff_loss += losses['loss_diff'] * B
-        repa_loss += losses['loss_repa'] * B
+        # Randomly sample diffusion timesteps for each data sample in the minibatch.
+        B = data_minibatch.shape[0]
+        t = torch.randint(0, ddpm.total_timesteps, (B,), device=device, dtype=torch.long).view(-1)
 
+        # Perform a forward diffusion step to time t and retrieve the corresponding noisy sample x_t and the true added noise.
+        x_t, true_noise = ddpm.forward_diffusion(data_minibatch, t)
+        
+        # Let the prediction model predict the added noise given the noisy sample x_t and the diffusion timestep t.
+        pred_noise = model(x_t, t)
+        
+        # Compute loss and backprop (normalized by total batch for stability)
+        loss = F.mse_loss(pred_noise, true_noise)
+
+        accumulation_steps = batch_size / B
+        scaled_loss = loss / accumulation_steps
+
+        scaled_loss.backward()
+
+        total_loss += loss.detach().item() * B
         data_samples += B
 
-    trainer.scaler.step(trainer.optimizer)
-    trainer.scaler.update()
-    trainer.optimizer.zero_grad(set_to_none=True)
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
     
-    return total_loss / max(data_samples, 1), diff_loss / max(data_samples, 1), repa_loss / max(data_samples, 1)
+    return total_loss / max(data_samples, 1)
 
 #############################################################################
 # Set the path to the VAE checkpoint
 checkpoint_dir = "../checkpoints"
 os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
-diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_repa_checkpoint.pt"
+vae_checkpoint_path = f"{checkpoint_dir}/VAE_ESM_step_200000.pt"
+diffusion_checkpoint_path = f"{checkpoint_dir}/latent_diffusion_ddpm_unet_esm_checkpoint.pt"
 
 iterations = 10000
-batch_size = 256
-minibatch_size = 16
+batch_size = 128
+minibatch_size = 64
 num_workers = 0
 
 save_checkpoint_every = 100
-save_checkpoint_milestone_every = 1000
+save_checkpoint_milestone_every = 2500
 print_loss_every = 25
 #############################################################################
 
@@ -147,33 +134,21 @@ unet = DiffusionUNet(
     model_out_channels=4
 ).to(device)
 
-# Config for REPA-DoG
-config = ExperimentConfig(
-    data_dir="../data",
-    dataset_name="celeba",
-    output_dir="../results/unet_dog",
-    max_steps=30000,
-    batch_size=batch_size,
-    lr=1e-4,
-    model_type="unet",
-    mode="dog",
-    lambda_repa=1.0,
-    num_evals=40,
-    num_eval_images=2000
-)
+# Instantiate AdamW optimizer
+optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4, weight_decay=1e-6)
 
-student_model, meta = build_student_model(config.model_type)
-wrapper = REPAWrapper(unet, meta, config)
-wrapper.student.train()
-trainer = DiffusionTrainer(wrapper, learning_rate=1e-4, lambda_repa=1.0)
+# Create VAE model and load checkpoint
+vae = VAE(mode="esm").to(device)
+checkpoint = torch.load(vae_checkpoint_path, map_location=device, weights_only=False)
+vae.load_state_dict(checkpoint["vae"], strict=False)
 
 start_iteration = 0
 
 if os.path.exists(diffusion_checkpoint_path):
 
     checkpoint = torch.load(diffusion_checkpoint_path, map_location=device, weights_only=False)
-    wrapper.student.load_state_dict(checkpoint["student"])
-    trainer.optimizer.load_state_dict(checkpoint["optimizer"])
+    unet.load_state_dict(checkpoint["unet"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
     start_iteration = checkpoint["iteration"] + 1
 
     print(f"Loaded checkpoint and starting from iteration {start_iteration}!")
@@ -187,14 +162,14 @@ for i in range(start_iteration, iterations):
     with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
     
         try:
-            total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
+            loss = train_step(data_i, batch_size, unet, ddpm_model)
 
         except:
             data_i = iter(train_loader)
-            total_loss, diff_loss, repa_loss = train_step(data_i, batch_size, trainer)
+            loss = train_step(data_i, batch_size, unet, ddpm_model)
 
     if i % print_loss_every == 0:
-        print(f"step {i:5d} | loss {total_loss:.4f} | diff {diff_loss:.4f} | repa {repa_loss:.4f}")
+        print(f"step {i:5d} | loss {loss:.4f}")
 
     # Periodic checkpoint save
     if save_checkpoint_every and save_checkpoint_every > 0 and (i % save_checkpoint_every == 0) and i != start_iteration:

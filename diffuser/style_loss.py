@@ -49,11 +49,11 @@ class VGGGramStyleLoss(nn.Module):
 
         self.register_buffer(
             "imagenet_mean",
-            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1),
+            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device),
         )
         self.register_buffer(
             "imagenet_std",
-            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1),
+            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(device),
         )
 
         style_image = self._load_style_image(style_image_path, image_size).to(device)
