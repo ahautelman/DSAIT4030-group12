@@ -16,6 +16,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torch.nn.functional import cross_entropy
 from tqdm import tqdm
+import numpy as np
 
 import vae
 from vae import VAE
@@ -27,8 +28,8 @@ from dataset_loader import load_dataset
 # =====================================================================
 CHECKPOINTS = {
     #"kl":  "vae/runs/celeba_kl_20260527_200958/checkpoints/step_200000.pt",
-    #"esm": "vae/runs/celeba_esm_20260605_092629/checkpoints/step_200000.pt",
-    #"dsm": "vae/runs/celeba_dsm_20260610_135717/checkpoints/step_100000.pt",
+    "esm": "vae/runs/celeba_esm_20260605_092629/checkpoints/step_200000.pt",
+    #"dsm": "vae/runs/celeba_dsm_20260610_135717/checkpoints/step_200000.pt",
     #"esm": "vae/runs/celeba_esm_20260606_105940/checkpoints/step_200000.pt", # Inverse Spectrum
 }
 BATCH_SIZE  = 16
@@ -51,7 +52,7 @@ def evaluate_one(vae_model, val_loader, mode):
     psnr_metric = PeakSignalNoiseRatio(data_range=2.0).to(DEVICE)
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=2.0).to(DEVICE)
     fid_metric  = FrechetInceptionDistance(normalize=True).to(DEVICE)
-    ce_metric = torch.zeros(1).to(DEVICE)
+    ce_metric = [] #torch.zeros(1).to(DEVICE)
 
     batch_count = 0
     with torch.no_grad():
@@ -64,7 +65,7 @@ def evaluate_one(vae_model, val_loader, mode):
             # Metrics calculation
             psnr_metric.update(recon, real)
             ssim_metric.update(recon, real)
-            ce_metric += cross_entropy(recon, real)
+            ce_metric.append( cross_entropy(recon, real).item() )
             
             # Rescale from [-1, 1] to [0, 1] as float for torchmetrics FID
             real_normalized = (real + 1) / 2.0
@@ -72,13 +73,15 @@ def evaluate_one(vae_model, val_loader, mode):
             
             fid_metric.update(real_normalized, real=True)
             fid_metric.update(recon_normalized, real=False)
-    ce_metric /= batch_count
+    ce_mean = np.mean(ce_metric)
+    ce_var = np.std(ce_metric)
 
     return {
         "rFID": fid_metric.compute().item(),
         "PSNR": psnr_metric.compute().item(),
         "SSIM": ssim_metric.compute().item(),
-        "CE": ce_metric.item()
+        "CE_m": ce_mean,
+        "CE_v": ce_var
     }
 
 # =====================================================================
@@ -102,5 +105,5 @@ print(f"\n{'='*50}")
 print(f"{'Mode':<8} {'rFID':>8} {'PSNR':>8} {'SSIM':>8} {'CE':>8}")
 print(f"{'-'*50}")
 for mode, metrics in all_results.items():
-    print(f"{mode.upper():<8} {metrics['rFID']:>8.2f} {metrics['PSNR']:>8.2f} {metrics['SSIM']:>8.3f} {metrics['CE']:>8.3f}")
+    print(f"{mode.upper():<8} {metrics['rFID']:>8.2f} {metrics['PSNR']:>8.2f} {metrics['SSIM']:>8.3f} {metrics['CE_m']:>8.3f}({metrics['CE_v']:>8.3f})")
 print(f"{'='*50}")
