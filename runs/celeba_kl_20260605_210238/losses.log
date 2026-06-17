@@ -1,0 +1,2 @@
+step 0 | total: 1.0508 | recon: 0.6380 | percep: 0.8249 | gan: 0.0000 | reg: 0.0004 | e2e: 0.00ms | fwd: 1793.84ms | step: 4738.30ms
+step 1 | total: 1.0521 | recon: 0.6432 | percep: 0.8152 | gan: 0.0000 | reg: 0.0013 | e2e: 4773.10ms | fwd: 1645.43ms | step: 4453.83ms

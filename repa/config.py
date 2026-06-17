@@ -12,7 +12,7 @@ class ExperimentConfig:
     max_steps: int
     batch_size: int
     lr: float
-    model_type: Literal["sit", "unet"]
+    model_type: Literal["sit", "sit_l_2", "unet"]
     mode: Literal["vanilla", "repa", "irepa", "dog"]
     lambda_repa: float
     num_evals: int
@@ -34,7 +34,7 @@ class ExperimentConfig:
         parser.add_argument("--max_steps", type=int, default=30_000)
         parser.add_argument("--batch_size", type=int, default=None)
         parser.add_argument("--lr", type=float, default=1e-4)
-        parser.add_argument("--model_type", type=str, choices=["sit", "unet"], default="sit")
+        parser.add_argument("--model_type", type=str, choices=["sit", "sit_l_2", "unet"], default="sit")
         parser.add_argument("--mode", type=str, choices=["vanilla", "repa", "irepa", "dog"], default="dog")
         parser.add_argument("--lambda_repa", type=float, default=1.0)
         parser.add_argument("--num_evals", type=int, default=40)

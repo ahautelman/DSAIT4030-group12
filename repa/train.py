@@ -60,6 +60,41 @@ class DiffusionTrainer:
             "loss_diff": loss_diff.item(),
             "loss_repa": loss_repa_val
         }
+    
+    def minibatch_backward_step(self, x_0: torch.Tensor, accumulation_steps: int = 1) -> dict:
+        #self.optimizer.zero_grad(set_to_none=True)
+        B = int(x_0.shape[0])
+        class_labels = x_0.new_full((B,), 1000, dtype=torch.long)
+
+        # 1. Target Features & Noise Injection
+        latents_0, z_0 = self._get_target_features(x_0)
+        noise = torch.randn_like(latents_0)
+        timesteps = torch.randint(0, self.num_train_timesteps, (B,), device=self.device).long()
+        x_t = self.noise_scheduler.add_noise(latents_0, noise, timesteps)
+
+        # 2. Execution Pass
+        with torch.autocast(device_type=self.device_type, dtype=self.dtype):
+            student_outputs = self.wrapper.forward_student(x_t, timesteps=timesteps, class_labels=class_labels)
+
+            # Lazy init projector on step 1
+            if self.mode != "vanilla" and self.wrapper.proj_head is None:
+                self._initialize_lazy_projector(z_0)
+
+            predicted_noise = self._extract_predicted_noise(student_outputs, latents_0.shape[1])
+            loss_repa, loss_repa_val = self._compute_alignment_loss(z_0, timesteps)
+
+            loss_diff = F.mse_loss(predicted_noise, noise)
+            loss_total = loss_diff + loss_repa
+
+        # 3. Optimize
+        scaled_loss = loss_total / accumulation_steps
+        self.scaler.scale(scaled_loss).backward()
+
+        return {
+            "loss_total": loss_total.item(),
+            "loss_diff": loss_diff.item(),
+            "loss_repa": loss_repa_val
+        }
 
     @torch.no_grad()
     def _get_target_features(self, x_0: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

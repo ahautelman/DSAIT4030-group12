@@ -10,12 +10,12 @@ from repa.align.hooks import register_feature_hook
 from repa.align.shape_utils import match_teacher_spatial_grid, tokens_to_spatial
 from repa.models.factory import ModelMeta
 from repa.align.projection import ConvProjector
-from repa.models.vae import DiffusersVAEWrapper
+from repa.models.vae import DiffusersVAEWrapper, BaseVAEWrapper
 from repa.config import ExperimentConfig
 
 
 class REPAWrapper(nn.Module):
-    def __init__(self, student_model: nn.Module, meta: ModelMeta, config: ExperimentConfig):
+    def __init__(self, student_model: nn.Module, meta: ModelMeta, config: ExperimentConfig, custom_vae: BaseVAEWrapper = None):
         super().__init__()
         self.mode = config.mode.lower()
         self.model_type = config.model_type.lower()
@@ -26,7 +26,11 @@ class REPAWrapper(nn.Module):
         # 1. Initialize Teacher & VAE (Frozen)
         self.teacher = AutoModel.from_pretrained(config.teacher_model_id, torch_dtype=self.compute_dtype).to(
             self.device)
-        self.vae = DiffusersVAEWrapper(config.vae_model_id, self.compute_dtype).to(self.device)
+        
+        if custom_vae is not None:
+            self.vae = custom_vae.to(self.device)
+        else:
+            self.vae = DiffusersVAEWrapper(config.vae_model_id, self.compute_dtype).to(self.device)
 
         self.teacher.eval()
         for param in self.teacher.parameters():
@@ -72,6 +76,8 @@ class REPAWrapper(nn.Module):
         """Architecture-agnostic forward pass."""
         if self.model_type == "sit":
             return self.student(x, timestep=timesteps, class_labels=class_labels)
+        if self.model_type == "sit_l_2":
+            return self.student(x, timesteps, class_labels)
         return self.student(x, t=timesteps)
 
     def get_teacher_features(self, x_0: torch.Tensor) -> torch.Tensor:
