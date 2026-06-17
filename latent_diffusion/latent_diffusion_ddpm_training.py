@@ -1,6 +1,5 @@
 import os, sys
 from sys import platform
-from types import SimpleNamespace
 
 import torch
 import torch.nn.functional as F
@@ -217,11 +216,11 @@ def training_procedure_with_repa_like(data_i, batch_size, minibatch_size, traine
 
 ###############################################################################################
 # Checkpoint paths
-vae_checkpoint_path = f"../checkpoints/VAE_ESM_step_200000.pt"
+vae_checkpoint_path = f"../checkpoints/VAE_DSM_step_200000.pt"
 training_checkpoint_path = f"../checkpoints/latent_diffusion_ddpm_test_checkpoint.pt"
 
 # General settings
-vae_type = "esm" # Use kl, esm or dsm
+vae_type = "dsm" # Use kl, esm or dsm
 noise_prediction_model = "sit_l_2" # Use unet or sit_l_2
 alignment = "none" # Use none, repa, irepa or dog
 alignment_lambda = 1.0 # Use 0.4 for REPA, 1.0 for iREPA and DoG

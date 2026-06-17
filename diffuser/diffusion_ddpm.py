@@ -1,246 +1,302 @@
-import os
-import sys
+import os, sys
 from sys import platform
 
-import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+# Check platform for platform specific operations
 if platform == "linux" or platform == "linux2":
     # We assume that the project folder is located in the home directory
     home_dir = os.path.expanduser("~")
     sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'DSAIT4030-group12')))
+    # Requires you to clone https://github.com/willisma/SiT into your home folder
+    sys.path.insert(0, os.path.abspath(os.path.join(home_dir, 'SiT')))
 
 elif platform == "win32":
     # Set import root to project root, to find dataset_loader and vae 
     sys.path.insert(0, os.path.abspath(os.path.join("..")))
-
-from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
-from diffuser.style_loss import VGGGramStyleLoss #ALP-ADDITION
-from diffuser.unet import DiffusionUNet
-
-# ALP-ADDITION: To be used when we add validation
-import csv
-from diffuser.frequency_mse import compute_per_frequency_denoising_mse
+    # TO DO: Windows integration of loading SiT
 
 from dataset_loader import load_dataset
 
-# Config:
+from diffuser.diffuser_ddpm_linear_schedule import Diffuser_DDPM_linear_schedule 
+from diffuser.style_loss import VGGGramStyleLoss
+from diffuser.unet import DiffusionUNet
 from diffuser.unet_config import DiffuserConfig
 
-def save_checkpoint(iteration, checkpoint_path):
-    
-    checkpoint = {
-        'iteration': iteration,
-        'unet': unet.state_dict(),
-        'optimizer': optimizer.state_dict(),
-    }
-    torch.save(checkpoint, checkpoint_path)
+from models import SiT_models
 
-# Loads data and uses VAE to generate latents
-def load_data(NUM_WORKERS, BATCH_SIZE, DATASET, percentage=1.0):
-    train_set = load_dataset(DATASET, split="train")
+def load_dataloader(batch_size, dataset, percentage=1.0):
 
-    if percentage < 1.0:
-        num_samples = int(len(train_set) * percentage)
-        train_set = Subset(train_set, range(num_samples))
+    training_set = load_dataset(dataset, split="train")
+    n_samples = int(len(training_set) * percentage)
 
-    train_loader = DataLoader(
-        train_set,
-        batch_size=BATCH_SIZE,
+    training_loader = DataLoader(
+        Subset(training_set, range(n_samples)),
+        batch_size=batch_size,
         shuffle=True,
-        num_workers=NUM_WORKERS,
-        pin_memory=True,
-        prefetch_factor=2 if NUM_WORKERS > 0 else None,
-        persistent_workers=True if NUM_WORKERS > 0 else False,
+        drop_last=True
     )
 
-    return train_loader
-                                                                # ALP-ADDITION: Style loss params for training
-def train_step(data_iter, batch_size, model, ddpm, fold_factor=1, use_style_loss=False, style_loss_fn=None, style_loss_weight=0.0, style_loss_t_max=300):
+    return training_loader
+
+def training_procedure_general(data_i, batch_size, minibatch_size, model, diffusion_model, model_type="unet"):
     
     model.train()
-    optimizer.zero_grad(set_to_none=True)
+    optimizer.zero_grad()
 
     total_loss = 0.0
-    data_samples = 0
+    total_samples = 0
 
-    while data_samples < batch_size:
+    minibatch_num = torch.div(batch_size, minibatch_size)
 
-        batch = next(data_iter)
+    while total_samples < batch_size:
 
-        data_minibatch = batch["images"].to(device, non_blocking=True)
+        # Load the next minibatch
+        minibatch = next(data_i)["images"].to(device)
 
-        if fold_factor > 1:
-            data_minibatch = F.pixel_unshuffle(data_minibatch, downscale_factor=fold_factor)
-
-        # Randomly sample diffusion timesteps for each data sample in the minibatch.
-        B = data_minibatch.shape[0]
-        t = torch.randint(0, ddpm.total_timesteps, (B,), device=device, dtype=torch.long).view(-1)
-
-        # Perform a forward diffusion step to time t and retrieve the corresponding noisy sample x_t and the true added noise.
-        x_t, true_noise = ddpm.forward_diffusion(data_minibatch, t)
+        # Randomly sample diffusion timesteps and perform forward diffusion
+        t = torch.randint(0, diffusion_model.total_timesteps, (minibatch_size,), device=device).view(-1)
+        x_t, eps_t = diffusion_model.forward_diffusion(minibatch, t)
         
-        # Let the prediction model predict the added noise given the noisy sample x_t and the diffusion timestep t.
-        pred_noise = model(x_t, t)
+        if model_type != "unet":
 
-        # ALP-ADDITION: Style loss added
-        # # Compute loss and backprop (normalized by total batch for stability)
-        # loss = F.mse_loss(pred_noise, true_noise)
-        # Standard DDPM noise prediction loss.
-        ddpm_loss = F.mse_loss(pred_noise, true_noise)
-        loss = ddpm_loss
+            # SiT expects a class label tensor
+            y = torch.full((minibatch_size,), 1000, device=device)
 
-        # Optional Gatys-style Gram matrix loss
-        if use_style_loss and style_loss_fn is not None and style_loss_weight > 0.0:
-            alpha_bar_t = ddpm.alpha_bars[t].to(device).view(-1, 1, 1, 1)
+            # Predict added noise per sample
+            eps_t_hat = model(x_t, t, y)
 
-            x0_hat = (
-                x_t - torch.sqrt(1.0 - alpha_bar_t) * pred_noise
-            ) / torch.sqrt(alpha_bar_t)
+        else:
+            
+            # Predict added noise per sample
+            eps_t_hat = model(x_t, t)
+        
+        # Compute L2 loss
+        loss = F.mse_loss(eps_t_hat, eps_t)
 
-            if fold_factor > 1:
-                x0_hat_rgb = F.pixel_shuffle(x0_hat, upscale_factor=fold_factor)
-            else:
-                x0_hat_rgb = x0_hat
+        # Normalize by the amount of minibatches
+        norm_loss = torch.div(loss, minibatch_num)
 
-            # Only apply style loss to lower/no-moderate noise timesteps.
-            # At very high t, x0_hat can be too unstable for VGG style supervision.
-            style_mask = t <= style_loss_t_max
+        # Perform backwards pass per minibatch
+        norm_loss.backward()
 
-            if style_mask.any():
-                # style_loss_value = style_loss_fn(x0_hat_rgb[style_mask])
+        total_loss = torch.add(total_loss, norm_loss.item())
+        total_samples = torch.add(total_samples, minibatch_size)
 
-                x0_hat_rgb_for_style = (x0_hat_rgb.clamp(-1.0, 1.0) + 1.0) / 2.0 # Convert from diffusion training range [-1, 1] to VGG input range [0, 1]
-                with torch.amp.autocast(device_type=device, enabled=False): 
-                    style_loss_value = style_loss_fn(
-                        x0_hat_rgb_for_style[style_mask].float()
-                    )
-                loss = loss + style_loss_weight * style_loss_value
-
-    
-        accumulation_steps = batch_size / B
-        scaled_loss = loss / accumulation_steps
-
-        scaled_loss.backward()
-
-        total_loss += loss.detach().item() * B
-        data_samples += B
-
+    # Perform one forward step after accumilating all the backward steps
     optimizer.step()
-    optimizer.zero_grad(set_to_none=True)
     
-    return total_loss / max(data_samples, 1)
+    return total_loss
 
-#############################################################################
-## ALP-ADDITION
-# NEW NOISES
-noise_mode = "white"      # "white", "hf", or "lf"
-noise_strength = 1.0
+def training_procedure_with_style_transfer(data_i, batch_size, minibatch_size, model, diffusion_model, style_loss_fn=None, style_loss_weight=0.0, style_loss_t_max=300, model_type="unet"):
+    
+    model.train()
+    optimizer.zero_grad()
 
-# Set the path to the VAE checkpoint
-checkpoint_dir = "../checkpoints"
-os.makedirs(checkpoint_dir, exist_ok=True)
-vae_checkpoint_path = f"{checkpoint_dir}/step_100000.pt"
+    total_loss = 0.0
+    total_mse_loss = 0.0
+    total_style_loss = 0.0
+    samples = 0
 
-iterations = 10000
-batch_size = 256
-minibatch_size = 4
-num_workers = 0
+    minibatch_num = torch.div(batch_size, minibatch_size)
 
-save_checkpoint_every = 100
-save_checkpoint_milestone_every = 1000
-print_loss_every = 25
-fold_factor = 2
+    while samples < batch_size:
+        
+        style_loss = torch.tensor(0.0, device=device)
+        
+        # Load the next minibatch
+        minibatch = next(data_i)["images"].to(device)
 
-## ALP-ADDITION:
-#STYLE LOSS CONFIG
+        # Randomly sample diffusion timesteps and perform forward diffusion
+        t = torch.randint(0, diffusion_model.total_timesteps, (minibatch_size,), device=device).view(-1)
+        x_t, eps_t = diffusion_model.forward_diffusion(minibatch, t)
+
+        if model_type != "unet":
+
+            # SiT expects a class label tensor
+            y = torch.full((minibatch_size,), 1000, device=device)
+
+            # Predict added noise per sample
+            eps_t_hat = model(x_t, t, y)
+
+        else:
+            
+            # Predict added noise per sample
+            eps_t_hat = model(x_t, t)
+        
+        # Compute L2 loss
+        mse_loss = F.mse_loss(eps_t_hat, eps_t)
+
+        alpha_bar_t = diffusion_model.alpha_bars[t].to(device).view(-1, 1, 1, 1)
+        x0_hat = torch.div(torch.sub(x_t, torch.mul(torch.sqrt(torch.sub(1.0, alpha_bar_t)), eps_t_hat)), torch.sqrt(alpha_bar_t))
+        
+        # Only compute style loss for valid t values
+        style_mask = t <= style_loss_t_max
+
+        if style_mask.any():
+
+            with torch.amp.autocast(device_type=device, enabled=False):
+
+                decoded_images = torch.div(torch.add(x0_hat[style_mask], 1.0), 2.0)
+                style_loss = style_loss_fn(decoded_images)
+                
+            batch_loss = torch.add(mse_loss, torch.mul(style_loss_weight, style_loss))
+        
+        else:
+
+            batch_loss = mse_loss
+
+        # Normalize by the amount of minibatches
+        norm_loss = torch.div(batch_loss, minibatch_num)
+        norm_loss.backward()
+
+        total_loss = torch.add(total_loss, norm_loss.item())
+        total_mse_loss = torch.add(total_mse_loss, mse_loss.item())
+        total_style_loss = torch.add(total_style_loss, style_loss.item())
+        samples = torch.add(samples, minibatch_size)
+
+    # Perform one forward step after accumilating all the backward steps
+    optimizer.step()
+    
+    return total_loss, total_mse_loss, total_style_loss
+
+###############################################################################################
+# Checkpoint paths
+training_checkpoint_path = f"../checkpoints/diffusion_ddpm_test_checkpoint.pt"
+
+# General settings
+noise_prediction_model = "sit_l_2" # Use unet or sit_l_2
+
+# Style loss settings
 use_style_loss = False
-style_image_path = "style_images/starry_night.jpg"
-style_loss_weight = 0.01 # can be reduced to make it more stable
+style_image_path = "../style_images/starry_night.jpg"
+style_loss_weight = 1.0 # Can be reduced to make it more stable
 style_loss_t_max = 300
 style_image_size = 64
 
-## ALP-ADDITION:
-if use_style_loss:
-    diffusion_checkpoint_path = f"{checkpoint_dir}/diffusion_ddpm_{noise_mode}_strength{noise_strength}_checkpoint_with_styleloss.pt"
-else:
-    diffusion_checkpoint_path = f"{checkpoint_dir}/diffusion_ddpm_{noise_mode}_strength{noise_strength}_checkpoint.pt"
+# Diffusion model settings
+diffusion_T = 1000
+diffusion_beta_start = 0.0001
+diffusion_beta_end = 0.02
+noise_mode = "white" # Use white, lf or hf
+noise_strength = 1.0
 
+# General optimization settings
+iterations = 10000
+batch_size = 1
+minibatch_size = 1 # Change based on what your GPU can handle :)
+learning_rate = 1e-4
+weight_decay = 1e-6
 
-#############################################################################
+# Dataset settings
+celeba_dataset_percentage = 0.35
+
+# Iterative settings
+save_checkpoint_every = 200
+save_checkpoint_milestone_every = 5000
+print_loss_every = 1
+###############################################################################################
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-torch.manual_seed(0)
-np.random.seed(0)
-
-# Create DDPM model with a linear beta schedule                                                     ## ALP-ADDITION: New params
-ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=1000, beta_start=0.0001, beta_end=0.02, noise_mode=noise_mode, noise_strength=noise_strength)
+# Define DDPM diffusion model and put it on the device
+ddpm_model = Diffuser_DDPM_linear_schedule(total_timesteps=diffusion_T, beta_start=diffusion_beta_start, beta_end=diffusion_beta_end, noise_mode=noise_mode, noise_strength=noise_strength)
 ddpm_model.betas = ddpm_model.betas.to(device)
 ddpm_model.alphas = ddpm_model.alphas.to(device)
 ddpm_model.alpha_bars = ddpm_model.alpha_bars.to(device)
 
-
-## ALP-ADDITION:
-style_loss_fn = None
+# Only load the VGGGramStyleLoss if we do style loss
 if use_style_loss:
-    style_loss_fn = VGGGramStyleLoss(
-        style_image_path=style_image_path,
-        device=device,
-        image_size=style_image_size,
-    ).to(device)
-
+    style_loss_fn = VGGGramStyleLoss(style_image_path=style_image_path, device=device, image_size=style_image_size).to(device)
     style_loss_fn.eval()
 
-folded_channels = 3 * (fold_factor ** 2)
+# Load either a U-Net or a SiT
+if noise_prediction_model == "unet":
 
-# Create U-Net model
-config = DiffuserConfig()
-unet = DiffusionUNet(
-    config=config,
-    model_in_channels=folded_channels,
-    model_out_channels=folded_channels
-).to(device)
+    config = DiffuserConfig()
+    model = DiffusionUNet(config=config, model_in_channels=3, model_out_channels=3).to(device)
 
-# Instantiate AdamW optimizer
-optimizer = torch.optim.AdamW(unet.parameters(), lr=1e-4, weight_decay=1e-6)
+elif noise_prediction_model == "sit_l_2":
 
+    model = SiT_models['SiT-L/2'](input_size=256, in_channels=3, learn_sigma=False).to(device)
+
+# Initialize AdamW
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+# Either we start from iteration zero, or this gets overwritten when a checkpoint exists
 start_iteration = 0
 
-if os.path.exists(diffusion_checkpoint_path):
+if os.path.exists(training_checkpoint_path):
 
-    checkpoint = torch.load(diffusion_checkpoint_path, map_location=device, weights_only=False)
-    unet.load_state_dict(checkpoint["unet"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    start_iteration = checkpoint["iteration"] + 1
+    checkpoint = torch.load(training_checkpoint_path, map_location=device, weights_only=False)
+    model.load_state_dict(checkpoint["model"]) # Prediction model
+    optimizer.load_state_dict(checkpoint["optimizer"]) # Optimizer
+    start_iteration = checkpoint["iteration"] + 1 # Start iteration
 
-    print(f"Loaded checkpoint and starting from iteration {start_iteration}!")
-
-train_loader = load_data(num_workers, minibatch_size, "celeba", percentage=0.35)
-#train_loader = load_data(num_workers, minibatch_size, "celeba", percentage=1.0) ## for the smoke test
+train_loader = load_dataloader(minibatch_size, "celeba", percentage=celeba_dataset_percentage)
 data_i = iter(train_loader)
 
-# Use start_step from checkpoint (if resumed) otherwise 0
-for i in range(start_iteration, iterations):
+# If we use style loss
+if use_style_loss:
 
-    with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
-    
-        try:                                                                                    ## ALP-ADDITION: new params
-            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
+    for i in range(start_iteration, iterations):
 
-        except:
-            data_i = iter(train_loader)                                                                                     ## ALP-ADDITION: new params
-            loss = train_step(data_i, batch_size, unet, ddpm_model, fold_factor=fold_factor, use_style_loss=use_style_loss, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max)
+        # Autocast to bfloat16 for less demanding compute
+        with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
+        
+            # Try to perform a training iteration, if it fails we presume we are out of training samples and retrieve new data
+            try:
+                loss, mse_loss, style_loss = training_procedure_with_style_transfer(data_i, batch_size, minibatch_size, model, ddpm_model, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max, model_type=noise_prediction_model)
+            except StopIteration:
+                data_i = iter(train_loader)
+                loss, mse_loss, style_loss = training_procedure_with_style_transfer(data_i, batch_size, minibatch_size, model, ddpm_model, style_loss_fn=style_loss_fn, style_loss_weight=style_loss_weight, style_loss_t_max=style_loss_t_max, model_type=noise_prediction_model)
 
-    if i % print_loss_every == 0:
-        print(f"step {i:5d} | loss {loss:.4f}")
+        # Iterative functions
+        if (i+1) % print_loss_every == 0:
+            print(f"step {(i+1)} | loss {loss} | mse loss {mse_loss} | style loss {style_loss}")
+            
+        save_condition_1 = (save_checkpoint_every and save_checkpoint_every > 0 and ((i+1) % save_checkpoint_every == 0) and i != start_iteration)
+        save_condition_2 = (save_checkpoint_milestone_every and save_checkpoint_milestone_every > 0 and ((i+1) % save_checkpoint_milestone_every == 0) and i != start_iteration)
+        
+        if save_condition_1 or save_condition_2:
 
-    # Periodic checkpoint save
-    if save_checkpoint_every and save_checkpoint_every > 0 and (i % save_checkpoint_every == 0) and i != start_iteration:
-        save_checkpoint(i, diffusion_checkpoint_path)
+            checkpoint = {'iteration': i, 'model': model.state_dict(), 'optimizer': optimizer.state_dict()}
+        
+            if save_condition_1:
+                torch.save(checkpoint, training_checkpoint_path)
 
-    if save_checkpoint_milestone_every and save_checkpoint_milestone_every > 0 and (i % save_checkpoint_milestone_every == 0) and i != start_iteration:
-        save_checkpoint(i, f"{diffusion_checkpoint_path[0:-3]}_{i}_.pt")
+            if save_condition_2:
+                torch.save(checkpoint, f"{training_checkpoint_path[0:-3]}_{(i+1)}_.pt")
+
+# Some more general training procedure
+else:
+
+    for i in range(start_iteration, iterations):
+
+        # Autocast to bfloat16 for less demanding compute
+        with torch.amp.autocast(device_type=device, dtype=torch.bfloat16):
+        
+            # Try to perform a training iteration, if it fails we presume we are out of training samples and retrieve new data
+            try:
+                loss = training_procedure_general(data_i, batch_size, minibatch_size, model, ddpm_model, model_type=noise_prediction_model)
+            except StopIteration:
+                data_i = iter(train_loader)
+                loss = training_procedure_general(data_i, batch_size, minibatch_size, model, ddpm_model, model_type=noise_prediction_model)
+
+        if (i+1) % print_loss_every == 0:
+            print(f"step {(i+1)} | loss {loss}")
+
+        save_condition_1 = (save_checkpoint_every and save_checkpoint_every > 0 and ((i+1) % save_checkpoint_every == 0) and i != start_iteration)
+        save_condition_2 = (save_checkpoint_milestone_every and save_checkpoint_milestone_every > 0 and ((i+1) % save_checkpoint_milestone_every == 0) and i != start_iteration)
+        
+        if save_condition_1 or save_condition_2:
+
+            checkpoint = {'iteration': i, 'model': model.state_dict(), 'optimizer': optimizer.state_dict()}
+        
+            if save_condition_1:
+                torch.save(checkpoint, training_checkpoint_path)
+
+            if save_condition_2:
+                torch.save(checkpoint, f"{training_checkpoint_path[0:-3]}_{(i+1)}_.pt")
