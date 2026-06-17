@@ -16,6 +16,7 @@ wheels/
 
 # Data files
 data/
-
-# Model checkpoints
-*.pt
+/checkpoints
+/reconstructions
+/runs
+/vae/runs
