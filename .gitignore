@@ -22,4 +22,5 @@ data/
 
 /checkpoints
 /reconstructions
-./step_100000.pt
+/runs
+/vae/runs
