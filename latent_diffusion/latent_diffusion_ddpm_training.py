@@ -341,7 +341,7 @@ if os.path.exists(training_checkpoint_path):
     
     if alignment != "none":
     
-        wrapper.student.load_state_dict(checkpoint["student"]) # Prediction model
+        wrapper.student.load_state_dict(checkpoint["model"]) # Prediction model
         trainer.optimizer.load_state_dict(checkpoint["optimizer"]) # Optimizer
         start_iteration = checkpoint["iteration"] + 1 # Start iteration
 
@@ -375,7 +375,7 @@ if alignment != "none":
         
         if save_condition_1 or save_condition_2:
 
-            checkpoint = {'iteration': i, 'student': wrapper.student.state_dict(), 'optimizer': trainer.optimizer.state_dict()}
+            checkpoint = {'iteration': i, 'model': wrapper.student.state_dict(), 'optimizer': trainer.optimizer.state_dict()}
         
             if save_condition_1:
                 torch.save(checkpoint, training_checkpoint_path)
