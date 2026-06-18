@@ -14,14 +14,12 @@ This project implements a quantitative comparative study of diffusion model trai
 
 ## Alignment Methods Overview
 
-All non-vanilla methods use a dynamic timestep weighting mechanism: `λ_dynamic = λ * (1.0 - t_norm)`, ensuring stronger alignment at high noise levels (t=1000) and weaker alignment at low noise (t=0).
-
-| Method | Mechanism | Projection Head | Alignment Target (z_0) | Recommended λ |
-|--------|-----------|-----------------|------------------------|---------------|
-| **Vanilla** | Pure diffusion (Baseline) | None | N/A | N/A |
-| **REPA** | Token-wise semantic alignment | 2-Layer MLP (Tokens) | DINOv2 raw tokens | 0.4 |
-| **iREPA** | Spatial grid alignment | 3×3 Conv (Spatial) | Spatially normalized DINOv2 | 1.0 |
-| **DoG** | Mid-frequency spectrum matching | 3×3 Conv (Spatial) | Band-pass filtered DINOv2 (σ₁-σ₂) | 1.0 |
+| Method      | Mechanism                       | Projection Head      | Alignment Target (z_0)            |
+|-------------|---------------------------------|----------------------|-----------------------------------|
+| **Vanilla** | Pure diffusion (Baseline)       | None                 | N/A                               |
+| **REPA**    | Token-wise semantic alignment   | 2-Layer MLP (Tokens) | DINOv2 raw tokens                 |
+| **iREPA**   | Spatial grid alignment          | 3×3 Conv (Spatial)   | Spatially normalized DINOv2       |
+| **DoG**     | Mid-frequency spectrum matching | 3×3 Conv (Spatial)   | Band-pass filtered DINOv2 (σ₁-σ₂) |
 
 *Note on DoG Kernel Selection*: To effectively isolate mid-frequency directional energy, tune your Gaussian blur σ values relative to the grid width. The Gaussian kernel parameters heavily depend on image size and composition. Low frequencies (σ ≈ 15-25% of width) and high frequencies (σ ≈ 0.5-1.0) should be subtracted out.
 

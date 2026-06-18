@@ -10,7 +10,7 @@ class ExperimentConfig:
     dataset_name: str
     output_dir: str
     max_steps: int
-    batch_size: int
+    batch_size: int | None
     lr: float
     model_type: Literal["sit", "sit_l_2", "unet"]
     mode: Literal["vanilla", "repa", "irepa", "dog"]
@@ -21,9 +21,8 @@ class ExperimentConfig:
     vae_model_id: str = "stabilityai/sd-vae-ft-mse"
 
     @classmethod
-    def from_args(cls) -> "ExperimentConfig":
-        """Parses CLI arguments into a typed configuration object."""
-        project_root = Path(__file__).resolve().parent.parent       # Dynamically find the project root
+    def _build_parser(cls) -> argparse.ArgumentParser:
+        project_root = Path(__file__).resolve().parent.parent
         default_data_dir = str(project_root / "data")
         default_output_dir = str(project_root / "results")
 
@@ -39,12 +38,22 @@ class ExperimentConfig:
         parser.add_argument("--lambda_repa", type=float, default=1.0)
         parser.add_argument("--num_evals", type=int, default=40)
         parser.add_argument("--num_eval_images", type=int, default=2_000)
+        return parser
 
-        args = parser.parse_args()
+    @classmethod
+    def from_args(cls, args: list[str] | None = None) -> "ExperimentConfig":
+        """Parses CLI arguments into a typed configuration object."""
+        parser = cls._build_parser()
+        parsed_args = parser.parse_args(args=args)
 
-        if args.max_steps <= 1:
-            args.num_evals = 1
-            args.num_eval_images = min(args.num_eval_images, args.batch_size or 1)
+        if parsed_args.max_steps <= 1:
+            parsed_args.num_evals = 1
+            parsed_args.num_eval_images = min(parsed_args.num_eval_images, parsed_args.batch_size or 1)
 
-        return cls(**vars(args))
-    
+        return cls(**vars(parsed_args))
+
+    @classmethod
+    def from_defaults(cls) -> "ExperimentConfig":
+        """Creates a config populated only with the declared defaults."""
+        return cls.from_args(args=[])
+

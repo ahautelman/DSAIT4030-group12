@@ -20,7 +20,7 @@ def get_celeba_dataloader(data_dir: str, batch_size: int, num_workers: int = 4) 
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,          
+        pin_memory=True,
         drop_last=True,
         persistent_workers=True
     )

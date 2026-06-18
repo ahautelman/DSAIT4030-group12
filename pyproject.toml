@@ -11,6 +11,7 @@ dependencies = [
     "gdown>=6.0.0",
     "ipykernel>=7.2.0",
     "matplotlib>=3.10.9",
+    "modal>=1.5.0",
     "numpy>=2.4.4",
     "opencv-python>=4.13.0.92",
     "pandas>=3.0.3",

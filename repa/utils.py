@@ -17,11 +17,12 @@ class ExperimentLogger:
     def log_step(self, step: int, losses: dict, fid_score: float = None):
         """Records a single step/evaluation event."""
         # Hardware Telemetry
-        ram_mb = self.process.memory_info().rss / (1024 * 1024)
-        if torch.cuda.is_available():
-            gpu_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
-        else:
-            gpu_mb = 0.0
+        # ram_mb = self.process.memory_info().rss / (1024 * 1024)
+        # if torch.cuda.is_available():
+        #     gpu_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+        # else:
+        #     gpu_mb = 0.0
+        gpu_mb = 0.0
 
         record = {
             "global_step": step,
@@ -29,7 +30,7 @@ class ExperimentLogger:
             "loss_repa": losses.get("loss_repa", 0.0),
             "loss_total": losses.get("loss_total", 0.0),
             "fid_score": fid_score,
-            "ram_usage_mb": round(ram_mb, 2),
+            # "ram_usage_mb": round(ram_mb, 2),
             "gpu_memory_peak_mb": round(gpu_mb, 2),
             "avg_step_time_secs": losses.get("avg_step_time_secs", 0.0),
             "throughput_imgs_sec": losses.get("throughput_imgs_sec", 0.0)

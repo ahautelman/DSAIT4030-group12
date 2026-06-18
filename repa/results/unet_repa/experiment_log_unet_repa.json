@@ -1,0 +1,162 @@
+[
+    {
+        "global_step": 666,
+        "loss_diff": 0.21942484378814697,
+        "loss_repa": -0.5725208520889282,
+        "loss_total": -0.009583473205566406,
+        "fid_score": 323.9137399547062,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3965558322476433,
+        "throughput_imgs_sec": 80.69481620942715
+    },
+    {
+        "global_step": 1332,
+        "loss_diff": 0.16119098663330078,
+        "loss_repa": -0.5852510929107666,
+        "loss_total": -0.07290945947170258,
+        "fid_score": 286.1903265912626,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39577273240390676,
+        "throughput_imgs_sec": 80.8544838489336
+    },
+    {
+        "global_step": 1998,
+        "loss_diff": 0.11488457024097443,
+        "loss_repa": -0.5916123390197754,
+        "loss_total": -0.12176038324832916,
+        "fid_score": 267.1480832388202,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3958761091516562,
+        "throughput_imgs_sec": 80.83336998682363
+    },
+    {
+        "global_step": 2664,
+        "loss_diff": 0.07402490824460983,
+        "loss_repa": -0.6046174764633179,
+        "loss_total": -0.16782206296920776,
+        "fid_score": 256.66696319010293,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39580112329125544,
+        "throughput_imgs_sec": 80.8486841419406
+    },
+    {
+        "global_step": 3330,
+        "loss_diff": 0.16244399547576904,
+        "loss_repa": -0.5935852527618408,
+        "loss_total": -0.07499010860919952,
+        "fid_score": 262.2981241535526,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3958294269713032,
+        "throughput_imgs_sec": 80.84290307784502
+    },
+    {
+        "global_step": 3996,
+        "loss_diff": 0.10991114377975464,
+        "loss_repa": -0.6202772855758667,
+        "loss_total": -0.13819977641105652,
+        "fid_score": 258.10127157521663,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39603537302250774,
+        "throughput_imgs_sec": 80.80086320516969
+    },
+    {
+        "global_step": 4662,
+        "loss_diff": 0.1245843693614006,
+        "loss_repa": -0.5982296466827393,
+        "loss_total": -0.11470747739076614,
+        "fid_score": 271.6012282031377,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39587804674324384,
+        "throughput_imgs_sec": 80.83297435473699
+    },
+    {
+        "global_step": 5328,
+        "loss_diff": 0.18162652850151062,
+        "loss_repa": -0.6268174052238464,
+        "loss_total": -0.06910040974617004,
+        "fid_score": 260.78375787035077,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3960181318123995,
+        "throughput_imgs_sec": 80.80438098515889
+    },
+    {
+        "global_step": 5994,
+        "loss_diff": 0.14015725255012512,
+        "loss_repa": -0.6012424230575562,
+        "loss_total": -0.10033971071243286,
+        "fid_score": 247.03802877959026,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3962106695180737,
+        "throughput_imgs_sec": 80.76511427348191
+    },
+    {
+        "global_step": 6660,
+        "loss_diff": 0.18743012845516205,
+        "loss_repa": -0.6019768118858337,
+        "loss_total": -0.05336059629917145,
+        "fid_score": 249.5571064352398,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39646181389929136,
+        "throughput_imgs_sec": 80.7139524618343
+    },
+    {
+        "global_step": 7326,
+        "loss_diff": 0.15515339374542236,
+        "loss_repa": -0.6252705454826355,
+        "loss_total": -0.09495484828948975,
+        "fid_score": 243.02039460723344,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39681790052241384,
+        "throughput_imgs_sec": 80.64152337349638
+    },
+    {
+        "global_step": 7992,
+        "loss_diff": 0.21359974145889282,
+        "loss_repa": -0.6275047659873962,
+        "loss_total": -0.037402182817459106,
+        "fid_score": 269.92101509878034,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39630123209625145,
+        "throughput_imgs_sec": 80.74665786612547
+    },
+    {
+        "global_step": 8658,
+        "loss_diff": 0.16368991136550903,
+        "loss_repa": -0.625638484954834,
+        "loss_total": -0.08656546473503113,
+        "fid_score": 247.8765105445197,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3960943168588586,
+        "throughput_imgs_sec": 80.78883901634633
+    },
+    {
+        "global_step": 9324,
+        "loss_diff": 0.1831454038619995,
+        "loss_repa": -0.5865849256515503,
+        "loss_total": -0.05148857831954956,
+        "fid_score": 235.3092160562989,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3967216139265204,
+        "throughput_imgs_sec": 80.66109553064821
+    },
+    {
+        "global_step": 9990,
+        "loss_diff": 0.17416256666183472,
+        "loss_repa": -0.6079057455062866,
+        "loss_total": -0.06899973750114441,
+        "fid_score": 244.48760768034373,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.3979200258842508,
+        "throughput_imgs_sec": 80.41816927632675
+    },
+    {
+        "global_step": 10000,
+        "loss_diff": 0.13851797580718994,
+        "loss_repa": -0.5995001196861267,
+        "loss_total": -0.10128206014633179,
+        "fid_score": 227.3909803058962,
+        "gpu_memory_peak_mb": 0.0,
+        "avg_step_time_secs": 0.39235582830078786,
+        "throughput_imgs_sec": 81.5586202416959
+    }
+]

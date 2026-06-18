@@ -76,6 +76,6 @@ def build_projection_for_student(
                 f"Spatial-shaped student features must have shape [B, C, H, W], got {tuple(student_feature_sample.shape)}"
             )
         student_channels = student_feature_sample.shape[1]
-        return ConvProjector(student_channels, teacher_channels, kernel=1)
+        return ConvProjector(student_channels, teacher_channels, kernel=kernel_size)
 
     raise ValueError(f"Unsupported feature_shape_hint: {meta.feature_shape_hint!r}")

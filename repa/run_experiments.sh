@@ -1,5 +1,6 @@
 #!/bin/bash
 ARCHS=("sit" "unet")
+#ARCHS=("unet")
 MODES=("vanilla" "repa" "irepa" "dog")
 
 for arch in "${ARCHS[@]}"; do
@@ -19,10 +20,9 @@ for arch in "${ARCHS[@]}"; do
       --model_type $arch \
       --mode $mode \
       --lambda_repa $LAMBDA \
-      --max_steps 100 \
-      --batch_size 16 \
-      --num_evals 1 \
-      --num_eval_images 200 \
+      --max_steps 10000 \
+      --num_evals 15 \
+      --batch_size 64 \
       --output_dir ./results/${arch}_${mode}
       
   done

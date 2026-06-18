@@ -24,15 +24,14 @@ The objective combines standard generative loss with an auxiliary alignment loss
 
 **Standard Diffusion Loss $L_\text{diff}$**
 - standard mean squared error between the predicted noise (or _velocity field_) and the actual noise
-- $L\text{diff} = \| \epsilon - F_\text{late}(h_t, t) \|^2 _ 2$
+- $L_\text{diff} = \| \epsilon - F_\text{late}(h_t, t) \|^2 _ 2$
 
 **REPA Loss $L_\text{REPA}$**
 - the negative cosine similarity between the projected intermediate features and the teacher features, averaged over all $N$ spatial patch tokens
-- $L_\text{REPA} = - \frac{1}{N} \sum_{i=1}^N \frac{P_\psi(h_t, i) \cdot z_{0, i}}{\| P_\psi(h_t, i \|_2 \| z_{o, i} \|_2}$
+- $L_\text{REPA} = - \frac{1}{N} \sum_{i=1}^N \frac{P_\psi(h_t, i) \cdot z_{0, i}}{\| P_\psi(h_t, i) \|_2 \| z_{0, i} \|_2}$
 
 **Total Objective**
-- $L_\text{total} = L_\text{diff} + \lambda(t) L_\text{REPA}$
-- $\lambda(t) = \lambda_0 \cdot (1 - t_\text{norm})$ where $t_\text{norm} = t / T$ is the normalized timestep. This dynamic weighting strengthens alignment when the image has low noise (early in denoising, where structure matters most) and weakens it when the image is nearly pure noise.
+- $L_\text{total} = L_\text{diff} + \lambda_0 L_\text{REPA}$
 - For vanilla REPA: $\lambda_0 = 0.2$ (aligns with original paper). For methods with convolutional projection heads (iREPA, DoG): $\lambda_0 = 0.5$ (stronger gradients needed for spatial alignment).
 
 
@@ -114,7 +113,6 @@ The standard diffusion loss $L_\text{diff}$ remains unchanged. However, we modif
 3. **Alignment Loss**
    - We then compute the loss (e.g., negative cosine similarity or Mean Squared Error) between the spatially preserved student features and the normalized teacher features:
    - $L_\text{iREPA} = -\frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, 1}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, i} \|_2}$
-   - This loss is scaled dynamically by timestep: $L_\text{iREPA}(t) = L_\text{iREPA} \cdot (1 - t_\text{norm})$
 4. **Recommended hyperparameter**: $\lambda_0 = 0.5$ for convolutional projection (stronger gradients needed for spatial structure learning)
 
 
@@ -148,8 +146,8 @@ The alignment loss requires preparing the teacher's target representation using 
      - Use kernel size $K = 4\sigma + 1$ (rounded to nearest odd), or intentionally truncate if exceeding 30% of grid width
      - Validate by examining the Power Spectral Density (PSD) of teacher features: DC component should be zero, mid-frequency energy preserved, high frequencies declining smoothly toward zero
 3. **Project Student Features**: As in iREPA, use a lightweight Convolutional head $C_\psi$ to map the student's hidden states $h_t$ to the teacher's dimension: $\hat z = C_\psi(h_t)$
-4. **Alignment Loss**: Calculate the negative cosine similarity between projected student features and DoG-filtered teacher features, scaled dynamically by timestep:
-   - $L_{DoG}(t) = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2} \times (1 - t_\text{norm})$
+4. **Alignment Loss**: Calculate the negative cosine similarity between projected student features and DoG-filtered teacher features:
+   - $L_{DoG} = - \frac{1}{N} \sum\limits^N_{i=1} \frac{C_\psi(h_t, i) \cdot \tilde z_{0, DoG, i}}{\| C_\psi(h_t, i) \|_2 \cdot \| \tilde z_{0, DoG, i} \|_2}$
 5. **Recommended hyperparameter**: $\lambda_0 = 0.5$ (convolutional projection requires stronger gradients)
 
 # U-REPA (U-Net Representation Alignment)
@@ -184,7 +182,7 @@ The overall objective continues to balance the generative task with alignment, b
    - $\hat{z} = U(P_\psi(h_t))$
 4. **Alignment (Manifold Loss)**: Calculate the alignment loss $L_\text{U-REPA}$. Rather than purely token-wise error, apply manifold regularization that computes the relative similarities among the batch representations, minimizing the divergence between the student manifold and the teacher manifold.
 5. **Total Objective**:
-   - $L_\text{total} = L_\text{diff} + \lambda(t) L_\text{U-REPA}$
+   - $L_\text{total} = L_\text{diff} + \lambda_0 L_\text{U-REPA}$
 
 ## Results & Performance
 U-REPA effectively bridges the U-Net-ViT gap, yielding massive efficiency gains over standard DiT and U-Net baselines. By fully utilizing the U-Net's innate downsampling and skip-connection advantages alongside targeted semantic alignment, U-REPA reaches an FID of $< 1.5$ on ImageNet 256x256 in just 200 epochs (1M iterations)—requiring only **half the total training budget** to outperform standard REPA.

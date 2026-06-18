@@ -133,9 +133,5 @@ class DiffusionTrainer:
             # Spatial grid: mean over spatial dims H and W
             loss_repa_per_sample = - F.cosine_similarity(z_hat, z_target, dim=1).mean(dim=[1, 2])
 
-        # Dynamic timestep weighting
-        t_norm = timesteps.float() / self.num_train_timesteps
-        dynamic_lambda = self.lambda_repa * t_norm
-
-        loss_repa = (loss_repa_per_sample * dynamic_lambda).mean()
+        loss_repa = (loss_repa_per_sample * self.lambda_repa).mean()
         return loss_repa, loss_repa_per_sample.mean().item()

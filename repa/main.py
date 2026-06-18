@@ -62,7 +62,7 @@ def run_evaluation_step(trainer, config, global_step, best_fid, optimal_batch_si
     eval_dir = os.path.join(config.output_dir, "temp_eval_fast")
 
     generate_and_save_images(
-        trainer.wrapper, config.num_eval_images, optimal_batch_size, trainer.device, eval_dir
+        trainer.wrapper, config.num_eval_images, 2*optimal_batch_size, trainer.device, eval_dir
     )
 
     try:
@@ -99,7 +99,7 @@ def run_evaluation_step(trainer, config, global_step, best_fid, optimal_batch_si
                    os.path.join(config.output_dir, f"checkpoint_best_{config.model_type}_{config.mode}.pt"))
         print("🌟 Saved new optimal state checkpoint.")
 
-    shutil.rmtree(eval_dir)
+    shutil.rmtree(eval_dir, ignore_errors=True)
     trainer.wrapper.train()
     return best_fid
 
